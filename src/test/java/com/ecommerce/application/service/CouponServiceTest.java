@@ -22,6 +22,7 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -47,7 +48,13 @@ class CouponServiceTest {
         coupon.setId(1L);
 
         CouponIssueRequest request = new CouponIssueRequest(1L, 1L);
-        when(couponRepository.findByIdWithLock(1L)).thenReturn(Optional.of(coupon));
+
+        // executeWithLock 모킹: Function을 받아서 실행
+        when(couponRepository.executeWithLock(eq(1L), any())).thenAnswer(invocation -> {
+            var operation = invocation.getArgument(1, java.util.function.Function.class);
+            return operation.apply(coupon);
+        });
+
         when(userCouponRepository.save(any(UserCoupon.class))).thenAnswer(invocation -> {
             UserCoupon uc = invocation.getArgument(0);
             uc.setId(1L);
@@ -61,7 +68,7 @@ class CouponServiceTest {
         assertThat(response.getUserId()).isEqualTo(1L);
         assertThat(response.getCouponId()).isEqualTo(1L);
         assertThat(response.getStatus()).isEqualTo(UserCouponStatus.AVAILABLE);
-        verify(couponRepository).save(coupon);
+        assertThat(coupon.getCurrentIssueCount()).isEqualTo(1); // 발급 횟수 증가 확인
         verify(userCouponRepository).save(any(UserCoupon.class));
     }
 
@@ -70,7 +77,10 @@ class CouponServiceTest {
     void issueCoupon_CouponNotFound() {
         // given
         CouponIssueRequest request = new CouponIssueRequest(1L, 999L);
-        when(couponRepository.findByIdWithLock(999L)).thenReturn(Optional.empty());
+
+        // executeWithLock에서 쿠폰이 없으면 예외 발생
+        when(couponRepository.executeWithLock(eq(999L), any()))
+                .thenThrow(new IllegalArgumentException("쿠폰을 찾을 수 없습니다"));
 
         // when & then
         assertThatThrownBy(() -> couponService.issueCoupon(request))

@@ -21,6 +21,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -60,7 +61,13 @@ class OrderServiceTest {
         OrderRequest request = new OrderRequest(1L, Arrays.asList(itemReq), null, null);
 
         when(userRepository.findById(1L)).thenReturn(Optional.of(user));
-        when(productRepository.findByIdWithLock(1L)).thenReturn(Optional.of(product));
+
+        // executeWithLock 모킹: Function을 받아서 실행
+        when(productRepository.executeWithLock(eq(1L), any())).thenAnswer(invocation -> {
+            var operation = invocation.getArgument(1, java.util.function.Function.class);
+            return operation.apply(product);
+        });
+
         when(orderRepository.save(any(Order.class))).thenAnswer(inv -> {
             Order o = inv.getArgument(0);
             o.setId(1L);
@@ -78,7 +85,7 @@ class OrderServiceTest {
         assertThat(response.getDiscountAmount()).isEqualTo(0);
         assertThat(response.getUsedPoint()).isEqualTo(0);
         assertThat(response.getFinalAmount()).isEqualTo(100000);
-        verify(productRepository).save(product);
+        assertThat(product.getStockQuantity()).isEqualTo(8); // 재고 차감 확인
     }
 
     @Test
