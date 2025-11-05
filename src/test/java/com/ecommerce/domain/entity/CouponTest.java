@@ -3,7 +3,7 @@ package com.ecommerce.domain.entity;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 import static org.assertj.core.api.Assertions.*;
 
@@ -13,35 +13,94 @@ class CouponTest {
     @Test
     @DisplayName("쿠폰을 생성한다")
     void createCoupon() {
+        // given
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime issueStart = now.minusDays(1);
+        LocalDateTime issueEnd = now.plusDays(30);
+
         // when
         Coupon coupon = new Coupon(
-                1L,
                 "10% 할인 쿠폰",
                 DiscountType.PERCENTAGE,
                 10,
-                5000,
-                LocalDate.now().plusDays(30)
+                100,
+                issueStart,
+                issueEnd,
+                30
         );
 
         // then
-        assertThat(coupon.getId()).isEqualTo(1L);
         assertThat(coupon.getName()).isEqualTo("10% 할인 쿠폰");
         assertThat(coupon.getDiscountType()).isEqualTo(DiscountType.PERCENTAGE);
         assertThat(coupon.getDiscountValue()).isEqualTo(10);
-        assertThat(coupon.getMaxDiscountAmount()).isEqualTo(5000);
+        assertThat(coupon.getMaxIssueCount()).isEqualTo(100);
+        assertThat(coupon.getCurrentIssueCount()).isEqualTo(0);
+        assertThat(coupon.getIssueStartDate()).isEqualTo(issueStart);
+        assertThat(coupon.getIssueEndDate()).isEqualTo(issueEnd);
+        assertThat(coupon.getValidPeriodDays()).isEqualTo(30);
+        assertThat(coupon.getStatus()).isEqualTo(CouponStatus.ACTIVE);
+        assertThat(coupon.getCreatedAt()).isNotNull();
+        assertThat(coupon.getUpdatedAt()).isNotNull();
     }
 
     @Test
-    @DisplayName("쿠폰 발급 가능 여부를 확인한다 - 수량 제한 없음")
-    void canIssue_NoQuantityLimit() {
+    @DisplayName("발급 기간 내에 있는지 확인한다")
+    void isWithinIssuePeriod() {
         // given
-        Coupon coupon = new Coupon(
-                1L,
-                "무제한 쿠폰",
+        LocalDateTime now = LocalDateTime.now();
+
+        // when - 발급 기간 내
+        Coupon validCoupon = new Coupon(
+                "유효한 쿠폰",
                 DiscountType.FIXED_AMOUNT,
                 1000,
-                null,
-                LocalDate.now().plusDays(30)
+                100,
+                now.minusDays(1),
+                now.plusDays(30),
+                30
+        );
+
+        // when - 발급 기간 전
+        Coupon futureCoupon = new Coupon(
+                "미래 쿠폰",
+                DiscountType.FIXED_AMOUNT,
+                1000,
+                100,
+                now.plusDays(1),
+                now.plusDays(30),
+                30
+        );
+
+        // when - 발급 기간 종료
+        Coupon expiredCoupon = new Coupon(
+                "만료된 쿠폰",
+                DiscountType.FIXED_AMOUNT,
+                1000,
+                100,
+                now.minusDays(30),
+                now.minusDays(1),
+                30
+        );
+
+        // then
+        assertThat(validCoupon.isWithinIssuePeriod()).isTrue();
+        assertThat(futureCoupon.isWithinIssuePeriod()).isFalse();
+        assertThat(expiredCoupon.isWithinIssuePeriod()).isFalse();
+    }
+
+    @Test
+    @DisplayName("쿠폰 발급 가능 여부를 확인한다 - 정상 케이스")
+    void canIssue_ValidCase() {
+        // given
+        LocalDateTime now = LocalDateTime.now();
+        Coupon coupon = new Coupon(
+                "정상 쿠폰",
+                DiscountType.FIXED_AMOUNT,
+                1000,
+                100,
+                now.minusDays(1),
+                now.plusDays(30),
+                30
         );
 
         // when & then
@@ -49,44 +108,57 @@ class CouponTest {
     }
 
     @Test
-    @DisplayName("쿠폰 발급 가능 여부를 확인한다 - 수량 제한 있음")
-    void canIssue_WithQuantityLimit() {
+    @DisplayName("쿠폰 발급 가능 여부를 확인한다 - 비활성 상태")
+    void canIssue_InactiveStatus() {
         // given
+        LocalDateTime now = LocalDateTime.now();
         Coupon coupon = new Coupon(
-                1L,
-                "한정 쿠폰",
+                "비활성 쿠폰",
                 DiscountType.FIXED_AMOUNT,
                 1000,
-                null,
-                LocalDate.now().plusDays(30),
-                100  // 총 발급 수량
+                100,
+                now.minusDays(1),
+                now.plusDays(30),
+                30
         );
+        coupon.deactivate();
 
-        // when & then - 아직 하나도 발급하지 않음
-        assertThat(coupon.canIssue()).isTrue();
-
-        // when - 50개 발급
-        for (int i = 0; i < 50; i++) {
-            coupon.issue();
-        }
-
-        // then - 아직 발급 가능
-        assertThat(coupon.canIssue()).isTrue();
-        assertThat(coupon.getRemainingQuantity()).isEqualTo(50);
+        // when & then
+        assertThat(coupon.canIssue()).isFalse();
     }
 
     @Test
-    @DisplayName("쿠폰 수량이 소진되면 발급할 수 없다")
-    void canIssue_ShouldReturnFalse_WhenQuantityExhausted() {
+    @DisplayName("쿠폰 발급 가능 여부를 확인한다 - 발급 기간 아님")
+    void canIssue_OutOfIssuePeriod() {
         // given
+        LocalDateTime now = LocalDateTime.now();
         Coupon coupon = new Coupon(
-                1L,
-                "한정 쿠폰",
+                "미래 쿠폰",
                 DiscountType.FIXED_AMOUNT,
                 1000,
-                null,
-                LocalDate.now().plusDays(30),
-                10
+                100,
+                now.plusDays(1),
+                now.plusDays(30),
+                30
+        );
+
+        // when & then
+        assertThat(coupon.canIssue()).isFalse();
+    }
+
+    @Test
+    @DisplayName("쿠폰 발급 가능 여부를 확인한다 - 수량 소진")
+    void canIssue_QuantityExhausted() {
+        // given
+        LocalDateTime now = LocalDateTime.now();
+        Coupon coupon = new Coupon(
+                "소진된 쿠폰",
+                DiscountType.FIXED_AMOUNT,
+                1000,
+                10,
+                now.minusDays(1),
+                now.plusDays(30),
+                30
         );
 
         // when - 10개 모두 발급
@@ -101,38 +173,86 @@ class CouponTest {
 
     @Test
     @DisplayName("쿠폰을 발급한다")
-    void issue() {
+    void issue() throws InterruptedException {
         // given
+        LocalDateTime now = LocalDateTime.now();
         Coupon coupon = new Coupon(
-                1L,
                 "테스트 쿠폰",
                 DiscountType.FIXED_AMOUNT,
                 1000,
-                null,
-                LocalDate.now().plusDays(30),
-                100
+                100,
+                now.minusDays(1),
+                now.plusDays(30),
+                30
         );
+        var originalUpdatedAt = coupon.getUpdatedAt();
+        Thread.sleep(10);
 
         // when
         coupon.issue();
 
         // then
-        assertThat(coupon.getIssuedQuantity()).isEqualTo(1);
+        assertThat(coupon.getCurrentIssueCount()).isEqualTo(1);
         assertThat(coupon.getRemainingQuantity()).isEqualTo(99);
+        assertThat(coupon.getUpdatedAt()).isAfter(originalUpdatedAt);
     }
 
     @Test
-    @DisplayName("발급 불가능한 쿠폰은 발급 시 예외가 발생한다")
-    void issue_ShouldThrowException_WhenCannotIssue() {
-        // given - 수량 소진된 쿠폰
+    @DisplayName("비활성 쿠폰은 발급할 수 없다")
+    void issue_ShouldThrowException_WhenInactive() {
+        // given
+        LocalDateTime now = LocalDateTime.now();
         Coupon coupon = new Coupon(
-                1L,
+                "비활성 쿠폰",
+                DiscountType.FIXED_AMOUNT,
+                1000,
+                100,
+                now.minusDays(1),
+                now.plusDays(30),
+                30
+        );
+        coupon.deactivate();
+
+        // when & then
+        assertThatThrownBy(() -> coupon.issue())
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("비활성화된 쿠폰은 발급할 수 없습니다");
+    }
+
+    @Test
+    @DisplayName("발급 기간이 아니면 발급할 수 없다")
+    void issue_ShouldThrowException_WhenOutOfIssuePeriod() {
+        // given
+        LocalDateTime now = LocalDateTime.now();
+        Coupon coupon = new Coupon(
+                "미래 쿠폰",
+                DiscountType.FIXED_AMOUNT,
+                1000,
+                100,
+                now.plusDays(1),
+                now.plusDays(30),
+                30
+        );
+
+        // when & then
+        assertThatThrownBy(() -> coupon.issue())
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("발급 기간이 아닙니다");
+    }
+
+    @Test
+    @DisplayName("수량이 소진되면 발급할 수 없다")
+    void issue_ShouldThrowException_WhenQuantityExhausted() {
+        // given
+        LocalDateTime now = LocalDateTime.now();
+        Coupon coupon = new Coupon(
                 "소진된 쿠폰",
                 DiscountType.FIXED_AMOUNT,
                 1000,
-                null,
-                LocalDate.now().plusDays(30),
-                1
+                1,
+                now.minusDays(1),
+                now.plusDays(30),
+                30
         );
         coupon.issue(); // 1개 발급하여 소진
 
@@ -143,77 +263,102 @@ class CouponTest {
     }
 
     @Test
-    @DisplayName("만료 여부를 확인한다 - 만료되지 않음")
-    void isExpired_ShouldReturnFalse_WhenNotExpired() {
-        // given - 30일 후 만료
+    @DisplayName("쿠폰 상태를 변경할 수 있다")
+    void updateStatus() throws InterruptedException {
+        // given
+        LocalDateTime now = LocalDateTime.now();
         Coupon coupon = new Coupon(
-                1L,
-                "유효한 쿠폰",
-                DiscountType.FIXED_AMOUNT,
-                1000,
-                null,
-                LocalDate.now().plusDays(30)
-        );
-
-        // when & then
-        assertThat(coupon.isExpired()).isFalse();
-    }
-
-    @Test
-    @DisplayName("만료 여부를 확인한다 - 만료됨")
-    void isExpired_ShouldReturnTrue_WhenExpired() {
-        // given - 어제 만료
-        Coupon coupon = new Coupon(
-                1L,
-                "만료된 쿠폰",
-                DiscountType.FIXED_AMOUNT,
-                1000,
-                null,
-                LocalDate.now().minusDays(1)
-        );
-
-        // when & then
-        assertThat(coupon.isExpired()).isTrue();
-    }
-
-    @Test
-    @DisplayName("쿠폰 ID가 null이면 예외가 발생한다")
-    void createCoupon_ShouldThrowException_WhenIdIsNull() {
-        // when & then
-        assertThatThrownBy(() -> new Coupon(
-                null,
                 "테스트 쿠폰",
                 DiscountType.FIXED_AMOUNT,
                 1000,
-                null,
-                LocalDate.now().plusDays(30)
-        ))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("쿠폰 ID는 필수");
+                100,
+                now.minusDays(1),
+                now.plusDays(30),
+                30
+        );
+        var originalUpdatedAt = coupon.getUpdatedAt();
+        Thread.sleep(10);
+
+        // when
+        coupon.updateStatus(CouponStatus.INACTIVE);
+
+        // then
+        assertThat(coupon.getStatus()).isEqualTo(CouponStatus.INACTIVE);
+        assertThat(coupon.getUpdatedAt()).isAfter(originalUpdatedAt);
+    }
+
+    @Test
+    @DisplayName("쿠폰을 활성화할 수 있다")
+    void activate() {
+        // given
+        LocalDateTime now = LocalDateTime.now();
+        Coupon coupon = new Coupon(
+                "테스트 쿠폰",
+                DiscountType.FIXED_AMOUNT,
+                1000,
+                100,
+                now.minusDays(1),
+                now.plusDays(30),
+                30
+        );
+        coupon.deactivate();
+
+        // when
+        coupon.activate();
+
+        // then
+        assertThat(coupon.getStatus()).isEqualTo(CouponStatus.ACTIVE);
+    }
+
+    @Test
+    @DisplayName("쿠폰을 비활성화할 수 있다")
+    void deactivate() {
+        // given
+        LocalDateTime now = LocalDateTime.now();
+        Coupon coupon = new Coupon(
+                "테스트 쿠폰",
+                DiscountType.FIXED_AMOUNT,
+                1000,
+                100,
+                now.minusDays(1),
+                now.plusDays(30),
+                30
+        );
+
+        // when
+        coupon.deactivate();
+
+        // then
+        assertThat(coupon.getStatus()).isEqualTo(CouponStatus.INACTIVE);
     }
 
     @Test
     @DisplayName("쿠폰 이름이 null이거나 빈 문자열이면 예외가 발생한다")
     void createCoupon_ShouldThrowException_WhenNameIsInvalid() {
+        // given
+        LocalDateTime now = LocalDateTime.now();
+
         // when & then
         assertThatThrownBy(() -> new Coupon(
-                1L,
                 null,
                 DiscountType.FIXED_AMOUNT,
                 1000,
-                null,
-                LocalDate.now().plusDays(30)
+                100,
+                now,
+                now.plusDays(30),
+                30
         ))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("쿠폰 이름은 필수");
 
         assertThatThrownBy(() -> new Coupon(
-                1L,
                 "",
                 DiscountType.FIXED_AMOUNT,
                 1000,
-                null,
-                LocalDate.now().plusDays(30)
+                100,
+                now,
+                now.plusDays(30),
+                30
         ))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("쿠폰 이름은 필수");
@@ -222,14 +367,18 @@ class CouponTest {
     @Test
     @DisplayName("할인 타입이 null이면 예외가 발생한다")
     void createCoupon_ShouldThrowException_WhenDiscountTypeIsNull() {
+        // given
+        LocalDateTime now = LocalDateTime.now();
+
         // when & then
         assertThatThrownBy(() -> new Coupon(
-                1L,
                 "테스트 쿠폰",
                 null,
                 1000,
-                null,
-                LocalDate.now().plusDays(30)
+                100,
+                now,
+                now.plusDays(30),
+                30
         ))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("할인 타입은 필수");
@@ -238,72 +387,197 @@ class CouponTest {
     @Test
     @DisplayName("할인 값이 0 이하면 예외가 발생한다")
     void createCoupon_ShouldThrowException_WhenDiscountValueIsInvalid() {
+        // given
+        LocalDateTime now = LocalDateTime.now();
+
         // when & then
         assertThatThrownBy(() -> new Coupon(
-                1L,
                 "테스트 쿠폰",
                 DiscountType.FIXED_AMOUNT,
                 0,
-                null,
-                LocalDate.now().plusDays(30)
+                100,
+                now,
+                now.plusDays(30),
+                30
         ))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("할인 값은 0보다 커야");
 
         assertThatThrownBy(() -> new Coupon(
-                1L,
                 "테스트 쿠폰",
                 DiscountType.PERCENTAGE,
                 -10,
-                null,
-                LocalDate.now().plusDays(30)
+                100,
+                now,
+                now.plusDays(30),
+                30
         ))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("할인 값은 0보다 커야");
     }
 
     @Test
-    @DisplayName("만료일이 null이면 예외가 발생한다")
-    void createCoupon_ShouldThrowException_WhenExpiryDateIsNull() {
+    @DisplayName("비율 할인은 100% 이하여야 한다")
+    void createCoupon_ShouldThrowException_WhenPercentageOver100() {
+        // given
+        LocalDateTime now = LocalDateTime.now();
+
         // when & then
         assertThatThrownBy(() -> new Coupon(
-                1L,
                 "테스트 쿠폰",
-                DiscountType.FIXED_AMOUNT,
-                1000,
-                null,
-                null
+                DiscountType.PERCENTAGE,
+                101,
+                100,
+                now,
+                now.plusDays(30),
+                30
         ))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("만료일은 필수");
+                .hasMessageContaining("비율 할인은 100% 이하여야 합니다");
     }
 
     @Test
-    @DisplayName("총 발급 수량이 0 이하면 예외가 발생한다")
-    void createCoupon_ShouldThrowException_WhenTotalQuantityIsInvalid() {
+    @DisplayName("최대 발급 수량이 0 이하면 예외가 발생한다")
+    void createCoupon_ShouldThrowException_WhenMaxIssueCountIsInvalid() {
+        // given
+        LocalDateTime now = LocalDateTime.now();
+
         // when & then
         assertThatThrownBy(() -> new Coupon(
-                1L,
                 "테스트 쿠폰",
                 DiscountType.FIXED_AMOUNT,
                 1000,
+                0,
+                now,
+                now.plusDays(30),
+                30
+        ))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("최대 발급 수량은 1개 이상");
+
+        assertThatThrownBy(() -> new Coupon(
+                "테스트 쿠폰",
+                DiscountType.FIXED_AMOUNT,
+                1000,
+                -10,
+                now,
+                now.plusDays(30),
+                30
+        ))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("최대 발급 수량은 1개 이상");
+    }
+
+    @Test
+    @DisplayName("발급 시작일이 null이면 예외가 발생한다")
+    void createCoupon_ShouldThrowException_WhenIssueStartDateIsNull() {
+        // given
+        LocalDateTime now = LocalDateTime.now();
+
+        // when & then
+        assertThatThrownBy(() -> new Coupon(
+                "테스트 쿠폰",
+                DiscountType.FIXED_AMOUNT,
+                1000,
+                100,
                 null,
-                LocalDate.now().plusDays(30),
+                now.plusDays(30),
+                30
+        ))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("발급 시작일은 필수");
+    }
+
+    @Test
+    @DisplayName("발급 종료일이 null이면 예외가 발생한다")
+    void createCoupon_ShouldThrowException_WhenIssueEndDateIsNull() {
+        // given
+        LocalDateTime now = LocalDateTime.now();
+
+        // when & then
+        assertThatThrownBy(() -> new Coupon(
+                "테스트 쿠폰",
+                DiscountType.FIXED_AMOUNT,
+                1000,
+                100,
+                now,
+                null,
+                30
+        ))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("발급 종료일은 필수");
+    }
+
+    @Test
+    @DisplayName("발급 종료일이 시작일보다 이전이면 예외가 발생한다")
+    void createCoupon_ShouldThrowException_WhenEndDateBeforeStartDate() {
+        // given
+        LocalDateTime now = LocalDateTime.now();
+
+        // when & then
+        assertThatThrownBy(() -> new Coupon(
+                "테스트 쿠폰",
+                DiscountType.FIXED_AMOUNT,
+                1000,
+                100,
+                now.plusDays(30),
+                now,
+                30
+        ))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("발급 종료일은 시작일보다 이후여야 합니다");
+    }
+
+    @Test
+    @DisplayName("유효 기간이 0 이하면 예외가 발생한다")
+    void createCoupon_ShouldThrowException_WhenValidPeriodDaysIsInvalid() {
+        // given
+        LocalDateTime now = LocalDateTime.now();
+
+        // when & then
+        assertThatThrownBy(() -> new Coupon(
+                "테스트 쿠폰",
+                DiscountType.FIXED_AMOUNT,
+                1000,
+                100,
+                now,
+                now.plusDays(30),
                 0
         ))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("총 발급 수량은 1개 이상");
+                .hasMessageContaining("유효 기간은 1일 이상");
 
         assertThatThrownBy(() -> new Coupon(
-                1L,
                 "테스트 쿠폰",
                 DiscountType.FIXED_AMOUNT,
                 1000,
-                null,
-                LocalDate.now().plusDays(30),
-                -10
+                100,
+                now,
+                now.plusDays(30),
+                -1
         ))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("총 발급 수량은 1개 이상");
+                .hasMessageContaining("유효 기간은 1일 이상");
+    }
+
+    @Test
+    @DisplayName("상태가 null이면 예외가 발생한다")
+    void updateStatus_ShouldThrowException_WhenStatusIsNull() {
+        // given
+        LocalDateTime now = LocalDateTime.now();
+        Coupon coupon = new Coupon(
+                "테스트 쿠폰",
+                DiscountType.FIXED_AMOUNT,
+                1000,
+                100,
+                now,
+                now.plusDays(30),
+                30
+        );
+
+        // when & then
+        assertThatThrownBy(() -> coupon.updateStatus(null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("상태는 필수");
     }
 }
