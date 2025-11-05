@@ -2,67 +2,79 @@ package com.ecommerce.domain.entity;
 
 import lombok.Getter;
 
+import java.time.LocalDateTime;
+
 /**
  * 사용자 도메인 Entity
- * 잔액 관리 비즈니스 로직을 포함합니다.
+ * 포인트 관리 비즈니스 로직을 포함합니다.
  */
 @Getter
 public class User {
 
     private final Long id;
     private final String name;
-    private Integer balance;
+    private final String email;
+    private Integer pointBalance;
+    private final LocalDateTime createdAt;
+    private LocalDateTime updatedAt;
 
-    public User(Long id, String name, Integer balance) {
-        validateConstructorParams(id, name, balance);
+    public User(Long id, String name, String email, Integer pointBalance) {
+        validateConstructorParams(id, name, email, pointBalance);
         this.id = id;
         this.name = name;
-        this.balance = balance;
+        this.email = email;
+        this.pointBalance = pointBalance;
+        this.createdAt = LocalDateTime.now();
+        this.updatedAt = LocalDateTime.now();
     }
 
-    private void validateConstructorParams(Long id, String name, Integer balance) {
+    private void validateConstructorParams(Long id, String name, String email, Integer pointBalance) {
         if (id == null) {
             throw new IllegalArgumentException("사용자 ID는 필수입니다");
         }
         if (name == null || name.isBlank()) {
             throw new IllegalArgumentException("사용자 이름은 필수입니다");
         }
-        if (balance == null || balance < 0) {
-            throw new IllegalArgumentException("초기 잔액은 0 이상이어야 합니다");
+        if (email == null || email.isBlank()) {
+            throw new IllegalArgumentException("이메일은 필수입니다");
+        }
+        if (pointBalance == null || pointBalance < 0) {
+            throw new IllegalArgumentException("초기 포인트는 0 이상이어야 합니다");
         }
     }
 
     /**
-     * 잔액이 충분한지 확인합니다.
+     * 포인트가 충분한지 확인합니다.
      *
      * @param amount 확인할 금액
-     * @return 잔액이 충분하면 true
+     * @return 포인트가 충분하면 true
      */
-    public boolean hasBalance(int amount) {
-        return this.balance >= amount;
+    public boolean hasPoint(int amount) {
+        return this.pointBalance >= amount;
     }
 
     /**
-     * 잔액을 차감합니다.
+     * 포인트를 차감합니다.
      *
      * @param amount 차감할 금액
      * @throws IllegalArgumentException 금액이 0 이하인 경우
-     * @throws IllegalStateException 잔액이 부족한 경우
+     * @throws IllegalStateException 포인트가 부족한 경우
      */
     public void deduct(int amount) {
         if (amount <= 0) {
             throw new IllegalArgumentException("금액은 0보다 커야 합니다");
         }
-        if (!hasBalance(amount)) {
+        if (!hasPoint(amount)) {
             throw new IllegalStateException(
-                    String.format("잔액 부족: 현재 잔액 %d원, 요청 금액 %d원", this.balance, amount)
+                    String.format("포인트 부족: 현재 포인트 %d원, 요청 금액 %d원", this.pointBalance, amount)
             );
         }
-        this.balance -= amount;
+        this.pointBalance -= amount;
+        this.updatedAt = LocalDateTime.now();
     }
 
     /**
-     * 잔액을 충전합니다.
+     * 포인트를 충전합니다.
      *
      * @param amount 충전할 금액
      * @throws IllegalArgumentException 금액이 0 이하인 경우
@@ -71,6 +83,7 @@ public class User {
         if (amount <= 0) {
             throw new IllegalArgumentException("금액은 0보다 커야 합니다");
         }
-        this.balance += amount;
+        this.pointBalance += amount;
+        this.updatedAt = LocalDateTime.now();
     }
 }
