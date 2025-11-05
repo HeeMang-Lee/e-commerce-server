@@ -11,7 +11,7 @@ import java.time.LocalDateTime;
 @Getter
 public class User {
 
-    private final Long id;
+    private Long id;
     private final String name;
     private final String email;
     private Integer pointBalance;
@@ -85,5 +85,14 @@ public class User {
         }
         this.pointBalance += amount;
         this.updatedAt = LocalDateTime.now();
+    }
+
+    /**
+     * ID를 설정합니다. (Repository에서 저장 후 호출)
+     *
+     * @param id 사용자 ID
+     */
+    public void setId(Long id) {
+        this.id = id;
     }
 }

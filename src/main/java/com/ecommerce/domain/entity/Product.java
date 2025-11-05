@@ -11,7 +11,7 @@ import java.time.LocalDateTime;
 @Getter
 public class Product {
 
-    private final Long id;
+    private Long id;
     private final String name;
     private final String description;
     private final Integer basePrice;
@@ -123,5 +123,14 @@ public class Product {
         }
         this.status = status;
         this.updatedAt = LocalDateTime.now();
+    }
+
+    /**
+     * ID를 설정합니다. (Repository에서 저장 후 호출)
+     *
+     * @param id 상품 ID
+     */
+    public void setId(Long id) {
+        this.id = id;
     }
 }
