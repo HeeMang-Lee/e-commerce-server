@@ -38,13 +38,15 @@ public class OrderService {
         // 2. 재고 확인 및 차감 (동시성 제어)
         List<OrderItem> orderItems = new ArrayList<>();
         for (OrderRequest.OrderItemRequest itemReq : request.getItems()) {
-            Product product = productRepository.findByIdWithLock(itemReq.getProductId())
-                    .orElseThrow(() -> new IllegalArgumentException("상품을 찾을 수 없습니다"));
-
-            product.reduceStock(itemReq.getQuantity());
-            productRepository.save(product);
-
-            orderItems.add(new OrderItem(product, itemReq.getQuantity()));
+            OrderItem orderItem = productRepository.executeWithLock(
+                    itemReq.getProductId(),
+                    product -> {
+                        // Read -> Modify -> Save가 락 보호 하에 실행됨
+                        product.reduceStock(itemReq.getQuantity());
+                        return new OrderItem(product, itemReq.getQuantity());
+                    }
+            );
+            orderItems.add(orderItem);
         }
 
         // 3. 주문 생성

@@ -32,22 +32,25 @@ public class CouponService {
      * @return 발급된 쿠폰 정보
      */
     public UserCouponResponse issueCoupon(CouponIssueRequest request) {
-        // Lock을 획득하며 쿠폰 조회
-        Coupon coupon = couponRepository.findByIdWithLock(request.getCouponId())
-                .orElseThrow(() -> new IllegalArgumentException("쿠폰을 찾을 수 없습니다"));
-
-        // 쿠폰 발급 (동시성 제어된 상태에서 실행)
-        coupon.issue();
-        couponRepository.save(coupon);
-
-        // 사용자 쿠폰 생성
-        LocalDateTime expiresAt = LocalDateTime.now().plusDays(coupon.getValidPeriodDays());
-        UserCoupon userCoupon = new UserCoupon(
-                request.getUserId(),
+        // Lock 보호 하에 Read -> Modify -> Save 실행
+        UserCoupon userCoupon = couponRepository.executeWithLock(
                 request.getCouponId(),
-                expiresAt
+                coupon -> {
+                    // 쿠폰 발급 (동시성 제어된 상태에서 실행)
+                    coupon.issue();
+
+                    // 사용자 쿠폰 생성
+                    LocalDateTime expiresAt = LocalDateTime.now().plusDays(coupon.getValidPeriodDays());
+                    UserCoupon newUserCoupon = new UserCoupon(
+                            request.getUserId(),
+                            request.getCouponId(),
+                            expiresAt
+                    );
+                    userCouponRepository.save(newUserCoupon);
+
+                    return newUserCoupon;
+                }
         );
-        userCouponRepository.save(userCoupon);
 
         return UserCouponResponse.from(userCoupon);
     }
