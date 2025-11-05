@@ -2,6 +2,8 @@ package com.ecommerce.domain.entity;
 
 import lombok.Getter;
 
+import java.time.LocalDateTime;
+
 /**
  * 상품 도메인 Entity
  * 재고 관리 및 가격 계산 비즈니스 로직을 포함합니다.
@@ -11,30 +13,40 @@ public class Product {
 
     private final Long id;
     private final String name;
-    private final Integer price;
-    private Integer stock;
+    private final String description;
+    private final Integer basePrice;
+    private Integer stockQuantity;
+    private ProductStatus status;
     private final String category;
+    private final LocalDateTime createdAt;
+    private LocalDateTime updatedAt;
 
-    public Product(Long id, String name, Integer price, Integer stock, String category) {
-        validateConstructorParams(id, name, price, stock, category);
+    public Product(Long id, String name, String description, Integer basePrice,
+                   Integer stockQuantity, String category) {
+        validateConstructorParams(id, name, basePrice, stockQuantity, category);
         this.id = id;
         this.name = name;
-        this.price = price;
-        this.stock = stock;
+        this.description = description;
+        this.basePrice = basePrice;
+        this.stockQuantity = stockQuantity;
+        this.status = ProductStatus.ACTIVE;
         this.category = category;
+        this.createdAt = LocalDateTime.now();
+        this.updatedAt = LocalDateTime.now();
     }
 
-    private void validateConstructorParams(Long id, String name, Integer price, Integer stock, String category) {
+    private void validateConstructorParams(Long id, String name, Integer basePrice,
+                                            Integer stockQuantity, String category) {
         if (id == null || id <= 0) {
             throw new IllegalArgumentException("상품 ID는 양수여야 합니다");
         }
         if (name == null || name.isBlank()) {
             throw new IllegalArgumentException("상품명은 필수입니다");
         }
-        if (price == null || price < 0) {
+        if (basePrice == null || basePrice < 0) {
             throw new IllegalArgumentException("가격은 0 이상이어야 합니다");
         }
-        if (stock == null || stock < 0) {
+        if (stockQuantity == null || stockQuantity < 0) {
             throw new IllegalArgumentException("재고는 0 이상이어야 합니다");
         }
         if (category == null || category.isBlank()) {
@@ -49,7 +61,7 @@ public class Product {
      * @return 재고가 충분하면 true, 부족하면 false
      */
     public boolean hasStock(int quantity) {
-        return this.stock >= quantity;
+        return this.stockQuantity >= quantity;
     }
 
     /**
@@ -65,10 +77,11 @@ public class Product {
         }
         if (!hasStock(quantity)) {
             throw new IllegalStateException(
-                    String.format("재고 부족: 현재 재고 %d개, 요청 수량 %d개", this.stock, quantity)
+                    String.format("재고 부족: 현재 재고 %d개, 요청 수량 %d개", this.stockQuantity, quantity)
             );
         }
-        this.stock -= quantity;
+        this.stockQuantity -= quantity;
+        this.updatedAt = LocalDateTime.now();
     }
 
     /**
@@ -81,7 +94,8 @@ public class Product {
         if (quantity <= 0) {
             throw new IllegalArgumentException("수량은 0보다 커야 합니다");
         }
-        this.stock += quantity;
+        this.stockQuantity += quantity;
+        this.updatedAt = LocalDateTime.now();
     }
 
     /**
@@ -95,6 +109,19 @@ public class Product {
         if (quantity < 1) {
             throw new IllegalArgumentException("수량은 1개 이상이어야 합니다");
         }
-        return this.price * quantity;
+        return this.basePrice * quantity;
+    }
+
+    /**
+     * 상품 상태를 변경합니다.
+     *
+     * @param status 변경할 상태
+     */
+    public void changeStatus(ProductStatus status) {
+        if (status == null) {
+            throw new IllegalArgumentException("상태는 필수입니다");
+        }
+        this.status = status;
+        this.updatedAt = LocalDateTime.now();
     }
 }
