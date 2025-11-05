@@ -1,6 +1,7 @@
 package com.ecommerce.application.service;
 
 import com.ecommerce.application.dto.PointChargeRequest;
+import com.ecommerce.application.dto.PointHistoryResponse;
 import com.ecommerce.application.dto.PointResponse;
 import com.ecommerce.domain.entity.PointHistory;
 import com.ecommerce.domain.entity.TransactionType;
@@ -15,6 +16,8 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.util.Arrays;
+import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.*;
@@ -98,5 +101,27 @@ class PointServiceTest {
         assertThatThrownBy(() -> pointService.getPoint(999L))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("사용자를 찾을 수 없습니다");
+    }
+
+    @Test
+    @DisplayName("포인트 이력을 조회한다")
+    void getPointHistory() {
+        // given
+        PointHistory history1 = new PointHistory(1L, TransactionType.CHARGE, 10000, 10000, "충전");
+        history1.setId(1L);
+        PointHistory history2 = new PointHistory(1L, TransactionType.USE, 5000, 5000, "사용");
+        history2.setId(2L);
+
+        when(pointHistoryRepository.findByUserId(1L)).thenReturn(Arrays.asList(history1, history2));
+
+        // when
+        List<PointHistoryResponse> histories = pointService.getPointHistory(1L);
+
+        // then
+        assertThat(histories).hasSize(2);
+        assertThat(histories.get(0).getTransactionType()).isEqualTo(TransactionType.CHARGE);
+        assertThat(histories.get(0).getAmount()).isEqualTo(10000);
+        assertThat(histories.get(1).getTransactionType()).isEqualTo(TransactionType.USE);
+        assertThat(histories.get(1).getAmount()).isEqualTo(5000);
     }
 }
