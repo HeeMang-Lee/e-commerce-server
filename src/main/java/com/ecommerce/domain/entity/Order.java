@@ -25,33 +25,23 @@ public class Order {
     private Long couponId;                  // 사용된 쿠폰 ID
 
     /**
-     * 쿠폰 없이 주문을 생성합니다.
+     * 주문을 생성합니다.
+     * TODO: Order 리팩토링 시 OrderPayment 분리로 쿠폰 적용 로직 이동 예정
      *
      * @param userId 사용자 ID
      * @param items 주문 항목들
      */
     public Order(Long userId, List<OrderItem> items) {
-        this(userId, items, null);
-    }
-
-    /**
-     * 쿠폰을 적용하여 주문을 생성합니다.
-     *
-     * @param userId 사용자 ID
-     * @param items 주문 항목들
-     * @param coupon 적용할 쿠폰 (null 가능)
-     */
-    public Order(Long userId, List<OrderItem> items, UserCoupon coupon) {
         validateConstructorParams(userId, items);
 
         this.userId = userId;
         this.items = new ArrayList<>(items);
         this.totalAmount = calculateTotalAmount(items);
-        this.discountAmount = coupon != null ? coupon.calculateDiscount(this.totalAmount) : 0;
-        this.finalAmount = this.totalAmount - this.discountAmount;
+        this.discountAmount = 0;  // TODO: OrderPayment로 이동
+        this.finalAmount = this.totalAmount;
         this.status = OrderStatus.PENDING;
         this.createdAt = LocalDateTime.now();
-        this.couponId = coupon != null ? coupon.getCouponId() : null;
+        this.couponId = null;
     }
 
     /**
