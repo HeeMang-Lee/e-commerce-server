@@ -1,10 +1,13 @@
 package com.ecommerce.interfaces.controller;
 
+import com.ecommerce.application.dto.OrderHistoryResponse;
 import com.ecommerce.application.dto.OrderRequest;
 import com.ecommerce.application.dto.OrderResponse;
 import com.ecommerce.application.service.OrderService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/orders")
@@ -16,5 +19,10 @@ public class OrderController {
     @PostMapping
     public OrderResponse createOrder(@RequestBody OrderRequest request) {
         return orderService.createOrder(request);
+    }
+
+    @GetMapping("/user/{userId}")
+    public List<OrderHistoryResponse> getOrderHistory(@PathVariable Long userId) {
+        return orderService.getOrderHistory(userId);
     }
 }
