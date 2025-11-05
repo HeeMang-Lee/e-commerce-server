@@ -57,4 +57,21 @@ class ProductControllerTest {
                 .andExpect(jsonPath("$.price").value(50000))
                 .andExpect(jsonPath("$.stockQuantity").value(10));
     }
+
+    @Test
+    @DisplayName("최근 3일간 인기 상품 Top 5를 조회한다")
+    void getTopProductsLast3Days() throws Exception {
+        // given
+        ProductResponse product1 = new ProductResponse(1L, "키보드", "무선", 50000, 10);
+        ProductResponse product2 = new ProductResponse(2L, "마우스", "유선", 30000, 20);
+        when(productService.getTopProductsLast3Days()).thenReturn(Arrays.asList(product1, product2));
+
+        // when & then
+        mockMvc.perform(get("/api/products/popular/last3days"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].id").value(1L))
+                .andExpect(jsonPath("$[0].name").value("키보드"))
+                .andExpect(jsonPath("$[1].id").value(2L))
+                .andExpect(jsonPath("$[1].name").value("마우스"));
+    }
 }
