@@ -1,5 +1,6 @@
 package com.ecommerce.application.service;
 
+import com.ecommerce.application.dto.OrderHistoryResponse;
 import com.ecommerce.application.dto.OrderRequest;
 import com.ecommerce.application.dto.OrderResponse;
 import com.ecommerce.domain.entity.*;
@@ -11,7 +12,9 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.*;
@@ -69,5 +72,31 @@ class OrderServiceTest {
         assertThat(response.getUsedPoint()).isEqualTo(0);
         assertThat(response.getFinalAmount()).isEqualTo(100000);
         verify(productRepository).save(product);
+    }
+
+    @Test
+    @DisplayName("사용자의 주문 내역을 조회한다")
+    void getOrderHistory() {
+        // given
+        User user = new User(1L, "테스트", "test@test.com", 10000);
+        Product product = new Product(1L, "키보드", "무선", 50000, 10, "전자");
+
+        List<OrderItem> items = new ArrayList<>();
+        items.add(new OrderItem(product, 2));
+
+        Order order = new Order(user.getId(), items);
+        order.setId(1L);
+
+        when(orderRepository.findByUserId(1L)).thenReturn(Arrays.asList(order));
+
+        // when
+        List<OrderHistoryResponse> history = orderService.getOrderHistory(1L);
+
+        // then
+        assertThat(history).hasSize(1);
+        assertThat(history.get(0).getOrderId()).isEqualTo(1L);
+        assertThat(history.get(0).getTotalAmount()).isEqualTo(100000);
+        assertThat(history.get(0).getItems()).hasSize(1);
+        assertThat(history.get(0).getItems().get(0).getProductName()).isEqualTo("키보드");
     }
 }

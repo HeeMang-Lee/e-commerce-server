@@ -1,5 +1,6 @@
 package com.ecommerce.application.service;
 
+import com.ecommerce.application.dto.OrderHistoryResponse;
 import com.ecommerce.application.dto.OrderRequest;
 import com.ecommerce.application.dto.OrderResponse;
 import com.ecommerce.domain.entity.*;
@@ -10,6 +11,7 @@ import org.springframework.stereotype.Service;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -100,5 +102,12 @@ public class OrderService {
                 usedPoint,
                 payment.getFinalAmount()
         );
+    }
+
+    public List<OrderHistoryResponse> getOrderHistory(Long userId) {
+        List<Order> orders = orderRepository.findByUserId(userId);
+        return orders.stream()
+                .map(OrderHistoryResponse::from)
+                .collect(Collectors.toList());
     }
 }
