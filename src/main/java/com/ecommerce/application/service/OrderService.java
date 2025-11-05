@@ -7,6 +7,7 @@ import com.ecommerce.domain.repository.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -20,6 +21,7 @@ public class OrderService {
     private final OrderPaymentRepository orderPaymentRepository;
     private final UserCouponRepository userCouponRepository;
     private final PointHistoryRepository pointHistoryRepository;
+    private final PopularProductRepository popularProductRepository;
 
     public OrderResponse createOrder(OrderRequest request) {
         // 1. 사용자 조회
@@ -79,6 +81,16 @@ public class OrderService {
         );
         payment.complete();
         orderPaymentRepository.save(payment);
+
+        // 5. 판매 이력 기록 (인기 상품 집계용)
+        LocalDateTime now = LocalDateTime.now();
+        for (OrderItem item : orderItems) {
+            popularProductRepository.recordSale(
+                    item.getProductId(),
+                    item.getQuantity(),
+                    now
+            );
+        }
 
         return new OrderResponse(
                 order.getId(),
