@@ -5,6 +5,7 @@ import com.ecommerce.application.dto.OrderRequest;
 import com.ecommerce.application.dto.OrderResponse;
 import com.ecommerce.domain.entity.*;
 import com.ecommerce.domain.repository.*;
+import com.ecommerce.infrastructure.external.DataPlatformService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -19,6 +20,7 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -39,6 +41,10 @@ class OrderServiceTest {
     private PointHistoryRepository pointHistoryRepository;
     @Mock
     private PopularProductRepository popularProductRepository;
+    @Mock
+    private OutboxEventRepository outboxEventRepository;
+    @Mock
+    private DataPlatformService dataPlatformService;
 
     @InjectMocks
     private OrderService orderService;
@@ -61,6 +67,7 @@ class OrderServiceTest {
             return o;
         });
         when(orderPaymentRepository.save(any(OrderPayment.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(dataPlatformService.sendOrderData(anyString())).thenReturn(true);
 
         // when
         OrderResponse response = orderService.createOrder(request);

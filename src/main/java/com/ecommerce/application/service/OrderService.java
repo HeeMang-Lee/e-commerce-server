@@ -5,7 +5,9 @@ import com.ecommerce.application.dto.OrderRequest;
 import com.ecommerce.application.dto.OrderResponse;
 import com.ecommerce.domain.entity.*;
 import com.ecommerce.domain.repository.*;
+import com.ecommerce.infrastructure.external.DataPlatformService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -13,6 +15,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class OrderService {
@@ -24,6 +27,8 @@ public class OrderService {
     private final UserCouponRepository userCouponRepository;
     private final PointHistoryRepository pointHistoryRepository;
     private final PopularProductRepository popularProductRepository;
+    private final OutboxEventRepository outboxEventRepository;
+    private final DataPlatformService dataPlatformService;
 
     public OrderResponse createOrder(OrderRequest request) {
         // 1. 사용자 조회
@@ -92,6 +97,30 @@ public class OrderService {
                     item.getQuantity(),
                     now
             );
+        }
+
+        // 6. 외부 데이터 플랫폼으로 주문 정보 전송 (직접 호출)
+        String orderData = String.format(
+                "{\"orderId\":%d,\"orderNumber\":\"%s\",\"userId\":%d,\"totalAmount\":%d,\"finalAmount\":%d}",
+                order.getId(), order.getOrderNumber(), user.getId(), totalAmount, payment.getFinalAmount()
+        );
+
+        try {
+            // 외부 API 직접 호출 시도
+            boolean success = dataPlatformService.sendOrderData(orderData);
+            if (success) {
+                log.info("주문 데이터 전송 성공: orderId={}", order.getId());
+            } else {
+                // 전송 실패 시 아웃박스에 저장 (재시도용)
+                log.warn("주문 데이터 전송 실패, 아웃박스에 저장: orderId={}", order.getId());
+                OutboxEvent outboxEvent = new OutboxEvent("ORDER_COMPLETED", orderData);
+                outboxEventRepository.save(outboxEvent);
+            }
+        } catch (Exception e) {
+            // 예외 발생 시에도 아웃박스에 저장
+            log.error("주문 데이터 전송 중 예외 발생, 아웃박스에 저장: orderId={}", order.getId(), e);
+            OutboxEvent outboxEvent = new OutboxEvent("ORDER_COMPLETED", orderData);
+            outboxEventRepository.save(outboxEvent);
         }
 
         return new OrderResponse(
