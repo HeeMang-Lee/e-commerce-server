@@ -1,6 +1,7 @@
 package com.ecommerce.domain.entity;
 
 import com.ecommerce.domain.vo.Email;
+import com.ecommerce.domain.vo.Money;
 import lombok.Getter;
 
 import java.time.LocalDateTime;
@@ -15,7 +16,7 @@ public class User {
     private Long id;
     private final String name;
     private final Email email;
-    private Integer pointBalance;
+    private Money pointBalance;
     private final LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
@@ -24,7 +25,7 @@ public class User {
         this.id = id;
         this.name = name;
         this.email = Email.of(email);
-        this.pointBalance = pointBalance;
+        this.pointBalance = Money.of(pointBalance);
         this.createdAt = LocalDateTime.now();
         this.updatedAt = LocalDateTime.now();
     }
@@ -42,13 +43,20 @@ public class User {
     }
 
     /**
+     * 포인트 잔액을 int로 반환합니다 (하위 호환성)
+     */
+    public int getPointBalance() {
+        return pointBalance.getAmount();
+    }
+
+    /**
      * 포인트가 충분한지 확인합니다.
      *
      * @param amount 확인할 금액
      * @return 포인트가 충분하면 true
      */
     public boolean hasPoint(int amount) {
-        return this.pointBalance >= amount;
+        return this.pointBalance.isGreaterThanOrEqual(Money.of(amount));
     }
 
     /**
@@ -64,10 +72,12 @@ public class User {
         }
         if (!hasPoint(amount)) {
             throw new IllegalStateException(
-                    String.format("포인트 부족: 현재 포인트 %d원, 요청 금액 %d원", this.pointBalance, amount)
+                    String.format("포인트 부족: 현재 포인트 %d원, 요청 금액 %d원",
+                            this.pointBalance.getAmount(), amount)
             );
         }
-        this.pointBalance -= amount;
+        Money deductAmount = Money.of(amount);
+        this.pointBalance = this.pointBalance.subtract(deductAmount);
         this.updatedAt = LocalDateTime.now();
     }
 
@@ -81,7 +91,8 @@ public class User {
         if (amount <= 0) {
             throw new IllegalArgumentException("금액은 0보다 커야 합니다");
         }
-        this.pointBalance += amount;
+        Money chargeAmount = Money.of(amount);
+        this.pointBalance = this.pointBalance.add(chargeAmount);
         this.updatedAt = LocalDateTime.now();
     }
 
