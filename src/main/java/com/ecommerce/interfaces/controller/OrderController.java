@@ -1,8 +1,6 @@
 package com.ecommerce.interfaces.controller;
 
-import com.ecommerce.application.dto.OrderHistoryResponse;
-import com.ecommerce.application.dto.OrderRequest;
-import com.ecommerce.application.dto.OrderResponse;
+import com.ecommerce.application.dto.*;
 import com.ecommerce.application.service.OrderService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
@@ -29,5 +27,12 @@ public class OrderController {
     @GetMapping("/{orderId}")
     public OrderHistoryResponse getOrder(@PathVariable Long orderId) {
         return orderService.getOrder(orderId);
+    }
+
+    @PostMapping("/{orderId}/payment")
+    public PaymentResponse processPayment(
+            @PathVariable Long orderId,
+            @RequestBody PaymentRequest request) {
+        return orderService.processPayment(orderId, request);
     }
 }
