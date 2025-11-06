@@ -1,5 +1,6 @@
 package com.ecommerce.domain.entity;
 
+import com.ecommerce.domain.vo.Money;
 import lombok.Getter;
 
 import java.time.LocalDateTime;
@@ -14,10 +15,10 @@ public class OrderPayment {
     private Long id;
     private final Long orderId;
     private final Long userCouponId;       // 사용한 쿠폰 ID (null 가능)
-    private final Integer originalAmount;   // 원 금액
-    private final Integer discountAmount;   // 쿠폰 할인 금액
-    private final Integer usedPoint;        // 사용 포인트
-    private final Integer finalAmount;      // 최종 결제 금액
+    private final Money originalAmount;   // 원 금액
+    private final Money discountAmount;   // 쿠폰 할인 금액
+    private final Money usedPoint;        // 사용 포인트
+    private final Money finalAmount;      // 최종 결제 금액
     private PaymentStatus paymentStatus;
     private String paymentData;             // 결제 관련 추가 데이터 (JSON)
     private LocalDateTime paidAt;
@@ -51,11 +52,11 @@ public class OrderPayment {
         validateConstructorParams(orderId, originalAmount, discountAmount, usedPoint);
 
         this.orderId = orderId;
-        this.originalAmount = originalAmount;
-        this.discountAmount = discountAmount;
-        this.usedPoint = usedPoint;
+        this.originalAmount = Money.of(originalAmount);
+        this.discountAmount = Money.of(discountAmount);
+        this.usedPoint = Money.of(usedPoint);
         this.userCouponId = userCouponId;
-        this.finalAmount = originalAmount - discountAmount - usedPoint;
+        this.finalAmount = this.originalAmount.subtract(this.discountAmount).subtract(this.usedPoint);
         this.paymentStatus = PaymentStatus.PENDING;
         this.createdAt = LocalDateTime.now();
     }
@@ -86,6 +87,34 @@ public class OrderPayment {
         if (discountAmount + usedPoint > originalAmount) {
             throw new IllegalArgumentException("할인 금액과 포인트의 합이 원 금액을 초과할 수 없습니다");
         }
+    }
+
+    /**
+     * 원 금액을 int로 반환합니다 (하위 호환성)
+     */
+    public int getOriginalAmount() {
+        return originalAmount.getAmount();
+    }
+
+    /**
+     * 할인 금액을 int로 반환합니다 (하위 호환성)
+     */
+    public int getDiscountAmount() {
+        return discountAmount.getAmount();
+    }
+
+    /**
+     * 사용 포인트를 int로 반환합니다 (하위 호환성)
+     */
+    public int getUsedPoint() {
+        return usedPoint.getAmount();
+    }
+
+    /**
+     * 최종 결제 금액을 int로 반환합니다 (하위 호환성)
+     */
+    public int getFinalAmount() {
+        return finalAmount.getAmount();
     }
 
     /**
