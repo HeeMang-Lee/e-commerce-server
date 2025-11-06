@@ -24,7 +24,7 @@ public class ProductController {
         return productService.getProduct(productId);
     }
 
-    @GetMapping("/popular/last3days")
+    @GetMapping("/top")
     public List<ProductResponse> getTopProductsLast3Days() {
         return productService.getTopProductsLast3Days();
     }
