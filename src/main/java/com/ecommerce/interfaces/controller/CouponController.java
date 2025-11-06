@@ -15,12 +15,13 @@ public class CouponController {
 
     private final CouponService couponService;
 
-    @PostMapping("/issue")
-    public UserCouponResponse issueCoupon(@RequestBody CouponIssueRequest request) {
+    @PostMapping("/{couponId}/issue")
+    public UserCouponResponse issueCoupon(@PathVariable Long couponId, @RequestParam Long userId) {
+        CouponIssueRequest request = new CouponIssueRequest(userId, couponId);
         return couponService.issueCoupon(request);
     }
 
-    @GetMapping("/user/{userId}")
+    @GetMapping("/users/{userId}")
     public List<UserCouponResponse> getUserCoupons(@PathVariable Long userId) {
         return couponService.getUserCoupons(userId);
     }
