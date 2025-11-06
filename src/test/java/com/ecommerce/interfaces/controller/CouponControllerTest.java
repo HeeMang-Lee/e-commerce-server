@@ -46,7 +46,8 @@ class CouponControllerTest {
         when(couponService.issueCoupon(any(CouponIssueRequest.class))).thenReturn(response);
 
         // when & then
-        mockMvc.perform(post("/api/coupons/issue")
+        mockMvc.perform(post("/api/coupons/{couponId}/issue", 1L)
+                        .queryParam("userId", "1")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())
@@ -69,7 +70,7 @@ class CouponControllerTest {
         when(couponService.getUserCoupons(1L)).thenReturn(Arrays.asList(coupon1, coupon2));
 
         // when & then
-        mockMvc.perform(get("/api/coupons/user/1"))
+        mockMvc.perform(get("/api/coupons/users/{userId}", 1L))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].userId").value(1L))
                 .andExpect(jsonPath("$[0].couponId").value(1L))

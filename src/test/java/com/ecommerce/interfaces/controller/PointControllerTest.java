@@ -44,7 +44,7 @@ class PointControllerTest {
         when(pointService.chargePoint(any(PointChargeRequest.class))).thenReturn(response);
 
         // when & then
-        mockMvc.perform(post("/api/points/charge")
+        mockMvc.perform(post("/api/points/users/1/charge")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())
@@ -60,7 +60,7 @@ class PointControllerTest {
         when(pointService.getPoint(1L)).thenReturn(response);
 
         // when & then
-        mockMvc.perform(get("/api/points/1"))
+        mockMvc.perform(get("/api/points/users/1/balance"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.userId").value(1L))
                 .andExpect(jsonPath("$.balance").value(5000));
@@ -79,7 +79,7 @@ class PointControllerTest {
         when(pointService.getPointHistory(1L)).thenReturn(Arrays.asList(history1, history2));
 
         // when & then
-        mockMvc.perform(get("/api/points/1/history"))
+        mockMvc.perform(get("/api/points/users/1/history"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].transactionType").value("CHARGE"))
                 .andExpect(jsonPath("$[0].amount").value(10000))

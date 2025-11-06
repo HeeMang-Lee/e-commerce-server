@@ -67,7 +67,7 @@ class ProductControllerTest {
         when(productService.getTopProductsLast3Days()).thenReturn(Arrays.asList(product1, product2));
 
         // when & then
-        mockMvc.perform(get("/api/products/popular/last3days"))
+        mockMvc.perform(get("/api/products/top"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].id").value(1L))
                 .andExpect(jsonPath("$[0].name").value("키보드"))

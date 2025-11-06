@@ -1,8 +1,6 @@
 package com.ecommerce.application.service;
 
-import com.ecommerce.application.dto.OrderHistoryResponse;
-import com.ecommerce.application.dto.OrderRequest;
-import com.ecommerce.application.dto.OrderResponse;
+import com.ecommerce.application.dto.*;
 import com.ecommerce.domain.entity.*;
 import com.ecommerce.domain.repository.*;
 import com.ecommerce.infrastructure.external.DataPlatformService;
@@ -125,8 +123,8 @@ class OrderIntegrationTest {
     }
 
     @Test
-    @DisplayName("포인트를 사용하여 주문하면 포인트가 차감된다")
-    void createOrder_WithPoint() {
+    @DisplayName("포인트를 사용하여 주문하고 결제하면 포인트가 차감된다")
+    void createOrderAndProcessPayment_WithPoint() {
         // given
         User user = new User(1L, "테스트", "test@test.com", 100000);
         userRepository.save(user);
@@ -137,13 +135,20 @@ class OrderIntegrationTest {
         OrderRequest.OrderItemRequest item = new OrderRequest.OrderItemRequest(1L, 1);
         OrderRequest request = new OrderRequest(1L, Arrays.asList(item), null, 10000);  // 10000 포인트 사용
 
-        // when
-        OrderResponse response = orderService.createOrder(request);
+        // when - 주문 생성
+        OrderResponse orderResponse = orderService.createOrder(request);
+
+        // 주문 생성 시에는 포인트가 차감되지 않음
+        assertThat(user.getPointBalance()).isEqualTo(100000);
+
+        // when - 결제 처리
+        PaymentRequest paymentRequest = new PaymentRequest(null, 10000);
+        PaymentResponse paymentResponse = orderService.processPayment(orderResponse.getOrderId(), paymentRequest);
 
         // then
-        assertThat(response.getTotalAmount()).isEqualTo(50000);
-        assertThat(response.getUsedPoint()).isEqualTo(10000);
-        assertThat(response.getFinalAmount()).isEqualTo(40000);  // 50000 - 10000
+        assertThat(orderResponse.getTotalAmount()).isEqualTo(50000);
+        assertThat(paymentResponse.getUsedPoint()).isEqualTo(10000);
+        assertThat(paymentResponse.getPaymentAmount()).isEqualTo(40000);  // 50000 - 10000
         assertThat(user.getPointBalance()).isEqualTo(90000);    // 100000 - 10000
 
         // 포인트 이력 확인
@@ -255,8 +260,8 @@ class OrderIntegrationTest {
     }
 
     @Test
-    @DisplayName("외부 데이터 플랫폼 전송에 실패해도 주문은 성공한다")
-    void createOrder_ExternalServiceFails_OrderSucceeds() {
+    @DisplayName("외부 데이터 플랫폼 전송에 실패해도 결제는 성공한다")
+    void processPayment_ExternalServiceFails_PaymentSucceeds() {
         // given
         when(dataPlatformService.sendOrderData(anyString())).thenReturn(false);
 
@@ -269,11 +274,16 @@ class OrderIntegrationTest {
         OrderRequest.OrderItemRequest item = new OrderRequest.OrderItemRequest(1L, 1);
         OrderRequest request = new OrderRequest(1L, Arrays.asList(item), null, null);
 
-        // when
-        OrderResponse response = orderService.createOrder(request);
+        // when - 주문 생성
+        OrderResponse orderResponse = orderService.createOrder(request);
 
-        // then
-        assertThat(response.getOrderId()).isNotNull();
+        // when - 결제 처리 (외부 전송 실패)
+        PaymentRequest paymentRequest = new PaymentRequest(null, 0);
+        PaymentResponse paymentResponse = orderService.processPayment(orderResponse.getOrderId(), paymentRequest);
+
+        // then - 결제는 성공
+        assertThat(paymentResponse.getOrderId()).isNotNull();
+        assertThat(paymentResponse.getPaymentStatus()).isEqualTo("COMPLETED");
 
         // 아웃박스에 이벤트가 저장됨
         List<com.ecommerce.domain.entity.OutboxEvent> events = outboxEventRepository.findByStatus(OutboxStatus.PENDING);

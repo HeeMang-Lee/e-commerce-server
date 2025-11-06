@@ -68,7 +68,7 @@ class OrderControllerTest {
         when(orderService.getOrderHistory(1L)).thenReturn(Arrays.asList(history));
 
         // when & then
-        mockMvc.perform(get("/api/orders/user/1"))
+        mockMvc.perform(get("/api/orders/users/{userId}", 1L))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].orderId").value(1L))
                 .andExpect(jsonPath("$[0].orderNumber").value("ORD-20250101-00001"))
