@@ -21,7 +21,7 @@ public class OrderController {
         return orderService.createOrder(request);
     }
 
-    @GetMapping("/user/{userId}")
+    @GetMapping("/users/{userId}")
     public List<OrderHistoryResponse> getOrderHistory(@PathVariable Long userId) {
         return orderService.getOrderHistory(userId);
     }
