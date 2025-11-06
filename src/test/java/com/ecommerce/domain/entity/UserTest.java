@@ -17,7 +17,7 @@ class UserTest {
         // then
         assertThat(user.getId()).isEqualTo(1L);
         assertThat(user.getName()).isEqualTo("홍길동");
-        assertThat(user.getEmail()).isEqualTo("hong@example.com");
+        assertThat(user.getEmail().getValue()).isEqualTo("hong@example.com");
         assertThat(user.getPointBalance()).isEqualTo(50000);
         assertThat(user.getCreatedAt()).isNotNull();
         assertThat(user.getUpdatedAt()).isNotNull();
@@ -151,11 +151,11 @@ class UserTest {
 
         assertThatThrownBy(() -> new User(1L, "홍길동", "", 50000))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("이메일은 필수");
+                .hasMessageContaining("유효하지 않은 이메일 형식");
 
         assertThatThrownBy(() -> new User(1L, "홍길동", "   ", 50000))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("이메일은 필수");
+                .hasMessageContaining("유효하지 않은 이메일 형식");
     }
 
     @Test

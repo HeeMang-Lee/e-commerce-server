@@ -1,5 +1,6 @@
 package com.ecommerce.domain.entity;
 
+import com.ecommerce.domain.vo.Email;
 import lombok.Getter;
 
 import java.time.LocalDateTime;
@@ -13,30 +14,27 @@ public class User {
 
     private Long id;
     private final String name;
-    private final String email;
+    private final Email email;
     private Integer pointBalance;
     private final LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
     public User(Long id, String name, String email, Integer pointBalance) {
-        validateConstructorParams(id, name, email, pointBalance);
+        validateConstructorParams(id, name, pointBalance);
         this.id = id;
         this.name = name;
-        this.email = email;
+        this.email = Email.of(email);
         this.pointBalance = pointBalance;
         this.createdAt = LocalDateTime.now();
         this.updatedAt = LocalDateTime.now();
     }
 
-    private void validateConstructorParams(Long id, String name, String email, Integer pointBalance) {
+    private void validateConstructorParams(Long id, String name, Integer pointBalance) {
         if (id == null) {
             throw new IllegalArgumentException("사용자 ID는 필수입니다");
         }
         if (name == null || name.isBlank()) {
             throw new IllegalArgumentException("사용자 이름은 필수입니다");
-        }
-        if (email == null || email.isBlank()) {
-            throw new IllegalArgumentException("이메일은 필수입니다");
         }
         if (pointBalance == null || pointBalance < 0) {
             throw new IllegalArgumentException("초기 포인트는 0 이상이어야 합니다");
