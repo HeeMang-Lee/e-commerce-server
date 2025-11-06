@@ -25,4 +25,9 @@ public class OrderController {
     public List<OrderHistoryResponse> getOrderHistory(@PathVariable Long userId) {
         return orderService.getOrderHistory(userId);
     }
+
+    @GetMapping("/{orderId}")
+    public OrderHistoryResponse getOrder(@PathVariable Long orderId) {
+        return orderService.getOrder(orderId);
+    }
 }

@@ -141,4 +141,10 @@ public class OrderService {
                 .map(OrderHistoryResponse::from)
                 .collect(Collectors.toList());
     }
+
+    public OrderHistoryResponse getOrder(Long orderId) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new IllegalArgumentException("주문을 찾을 수 없습니다"));
+        return OrderHistoryResponse.from(order);
+    }
 }
