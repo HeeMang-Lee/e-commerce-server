@@ -1,5 +1,6 @@
 package com.ecommerce.domain.entity;
 
+import com.ecommerce.domain.vo.Money;
 import lombok.Getter;
 
 import java.time.LocalDateTime;
@@ -15,8 +16,8 @@ public class PointHistory {
     private final Long userId;
     private final Long relatedOrderId;        // 관련 주문 ID (없을 수 있음)
     private final TransactionType transactionType;
-    private final Integer amount;             // 변동 금액
-    private final Integer balanceAfter;       // 변동 후 잔액
+    private final Money amount;             // 변동 금액
+    private final Money balanceAfter;       // 변동 후 잔액
     private final String description;
     private final LocalDateTime createdAt;
 
@@ -51,8 +52,8 @@ public class PointHistory {
 
         this.userId = userId;
         this.transactionType = transactionType;
-        this.amount = amount;
-        this.balanceAfter = balanceAfter;
+        this.amount = Money.of(amount);
+        this.balanceAfter = Money.of(balanceAfter);
         this.description = description;
         this.relatedOrderId = relatedOrderId;
         this.createdAt = LocalDateTime.now();
@@ -78,6 +79,20 @@ public class PointHistory {
         if (balanceAfter < 0) {
             throw new IllegalArgumentException("변동 후 잔액은 0 이상이어야 합니다");
         }
+    }
+
+    /**
+     * 변동 금액을 int로 반환합니다 (하위 호환성)
+     */
+    public int getAmount() {
+        return amount.getAmount();
+    }
+
+    /**
+     * 변동 후 잔액을 int로 반환합니다 (하위 호환성)
+     */
+    public int getBalanceAfter() {
+        return balanceAfter.getAmount();
     }
 
     /**
