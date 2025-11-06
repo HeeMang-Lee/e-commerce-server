@@ -1,5 +1,6 @@
 package com.ecommerce.domain.entity;
 
+import com.ecommerce.domain.vo.Money;
 import lombok.Getter;
 
 import java.time.LocalDateTime;
@@ -16,8 +17,8 @@ public class OrderItem {
     private final Long productId;
     private final String snapshotProductName;
     private final Integer quantity;
-    private final Integer snapshotPrice;        // 주문 당시 단가 (스냅샷)
-    private final Integer itemTotalAmount;      // 소계 (단가 × 수량)
+    private final Money snapshotPrice;        // 주문 당시 단가 (스냅샷)
+    private final Money itemTotalAmount;      // 소계 (단가 × 수량)
     private OrderItemStatus status;
     private final LocalDateTime createdAt;
     private LocalDateTime updatedAt;
@@ -36,8 +37,8 @@ public class OrderItem {
         this.productId = product.getId();
         this.snapshotProductName = product.getName();
         this.quantity = quantity;
-        this.snapshotPrice = product.getBasePrice();
-        this.itemTotalAmount = calculateItemTotalAmount(product.getBasePrice(), quantity);
+        this.snapshotPrice = Money.of(product.getBasePrice());
+        this.itemTotalAmount = this.snapshotPrice.multiply(quantity);
         this.status = OrderItemStatus.PENDING;
         this.createdAt = LocalDateTime.now();
         this.updatedAt = LocalDateTime.now();
@@ -56,14 +57,17 @@ public class OrderItem {
     }
 
     /**
-     * 항목 총액을 계산합니다.
-     *
-     * @param price 단가
-     * @param quantity 수량
-     * @return 항목 총액 (단가 × 수량)
+     * 스냅샷 가격을 int로 반환합니다 (하위 호환성)
      */
-    private int calculateItemTotalAmount(int price, int quantity) {
-        return price * quantity;
+    public int getSnapshotPrice() {
+        return snapshotPrice.getAmount();
+    }
+
+    /**
+     * 항목 총액을 int로 반환합니다 (하위 호환성)
+     */
+    public int getItemTotalAmount() {
+        return itemTotalAmount.getAmount();
     }
 
     /**
@@ -144,18 +148,18 @@ public class OrderItem {
     }
 
     /**
-     * @deprecated snapshotPrice를 사용하세요
+     * @deprecated getSnapshotPrice()를 사용하세요
      */
     @Deprecated
     public Integer getPrice() {
-        return snapshotPrice;
+        return snapshotPrice.getAmount();
     }
 
     /**
-     * @deprecated itemTotalAmount를 사용하세요
+     * @deprecated getItemTotalAmount()를 사용하세요
      */
     @Deprecated
     public Integer getSubtotal() {
-        return itemTotalAmount;
+        return itemTotalAmount.getAmount();
     }
 }
