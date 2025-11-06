@@ -16,17 +16,18 @@ public class PointController {
 
     private final PointService pointService;
 
-    @PostMapping("/charge")
-    public PointResponse chargePoint(@RequestBody PointChargeRequest request) {
+    @PostMapping("/users/{userId}/charge")
+    public PointResponse chargePoint(@PathVariable Long userId, @RequestBody PointChargeRequest request) {
+        request.setUserId(userId);
         return pointService.chargePoint(request);
     }
 
-    @GetMapping("/{userId}")
+    @GetMapping("/users/{userId}/balance")
     public PointResponse getPoint(@PathVariable Long userId) {
         return pointService.getPoint(userId);
     }
 
-    @GetMapping("/{userId}/history")
+    @GetMapping("/users/{userId}/history")
     public List<PointHistoryResponse> getPointHistory(@PathVariable Long userId) {
         return pointService.getPointHistory(userId);
     }
