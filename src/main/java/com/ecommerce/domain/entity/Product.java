@@ -1,5 +1,6 @@
 package com.ecommerce.domain.entity;
 
+import com.ecommerce.domain.vo.Money;
 import lombok.Getter;
 
 import java.time.LocalDateTime;
@@ -14,7 +15,7 @@ public class Product {
     private Long id;
     private final String name;
     private final String description;
-    private final Integer basePrice;
+    private final Money basePrice;
     private Integer stockQuantity;
     private ProductStatus status;
     private final String category;
@@ -27,7 +28,7 @@ public class Product {
         this.id = id;
         this.name = name;
         this.description = description;
-        this.basePrice = basePrice;
+        this.basePrice = Money.of(basePrice);
         this.stockQuantity = stockQuantity;
         this.status = ProductStatus.ACTIVE;
         this.category = category;
@@ -52,6 +53,13 @@ public class Product {
         if (category == null || category.isBlank()) {
             throw new IllegalArgumentException("카테고리는 필수입니다");
         }
+    }
+
+    /**
+     * 기본 가격을 int로 반환합니다 (하위 호환성)
+     */
+    public int getBasePrice() {
+        return basePrice.getAmount();
     }
 
     /**
@@ -109,7 +117,7 @@ public class Product {
         if (quantity < 1) {
             throw new IllegalArgumentException("수량은 1개 이상이어야 합니다");
         }
-        return this.basePrice * quantity;
+        return this.basePrice.multiply(quantity).getAmount();
     }
 
     /**
