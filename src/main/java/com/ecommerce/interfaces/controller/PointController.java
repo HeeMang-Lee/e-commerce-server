@@ -18,8 +18,8 @@ public class PointController {
 
     @PostMapping("/users/{userId}/charge")
     public PointResponse chargePoint(@PathVariable Long userId, @RequestBody PointChargeRequest request) {
-        request.setUserId(userId);
-        return pointService.chargePoint(request);
+        PointChargeRequest chargeRequest = new PointChargeRequest(userId, request.amount());
+        return pointService.chargePoint(chargeRequest);
     }
 
     @GetMapping("/users/{userId}/balance")

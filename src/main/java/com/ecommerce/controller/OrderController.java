@@ -25,7 +25,7 @@ public class OrderController implements OrderApi {
         OrderDto.Response order = new OrderDto.Response(
                 100L,
                 "ORD-20241029-001",
-                request.getUserId(),
+                request.userId(),
                 items,
                 178000,
                 5000,
@@ -91,7 +91,7 @@ public class OrderController implements OrderApi {
                 orderId,
                 "COMPLETED",
                 163000,
-                request.getUsePoint() != null ? request.getUsePoint() : 0,
+                request.usePoint() != null ? request.usePoint() : 0,
                 LocalDateTime.now()
         );
 

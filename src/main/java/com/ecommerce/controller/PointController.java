@@ -31,8 +31,8 @@ public class PointController implements PointApi {
 
         CouponPointDto.ChargeResponse charge = new CouponPointDto.ChargeResponse(
                 userId,
-                request.getAmount(),
-                50000 + request.getAmount(),
+                request.amount(),
+                50000 + request.amount(),
                 LocalDateTime.now()
         );
 
