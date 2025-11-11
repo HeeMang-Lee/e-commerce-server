@@ -1,32 +1,26 @@
 package com.ecommerce.application.dto;
 
 import com.ecommerce.domain.entity.Order;
-import com.ecommerce.domain.entity.OrderItem;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
 
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
 
-@Getter
-@AllArgsConstructor
-public class OrderHistoryResponse {
-    private Long orderId;
-    private String orderNumber;
-    private Integer totalAmount;
-    private LocalDateTime orderDate;
-    private List<OrderItemInfo> items;
+public record OrderHistoryResponse(
+    Long orderId,
+    String orderNumber,
+    Integer totalAmount,
+    LocalDateTime orderDate,
+    List<OrderItemInfo> items
+) {
 
-    @Getter
-    @AllArgsConstructor
-    public static class OrderItemInfo {
-        private Long productId;
-        private String productName;
-        private Integer quantity;
-        private Integer price;
-        private String status;
-    }
+    public record OrderItemInfo(
+        Long productId,
+        String productName,
+        Integer quantity,
+        Integer price,
+        String status
+    ) {}
 
     public static OrderHistoryResponse from(Order order) {
         List<OrderItemInfo> items = order.getItems().stream()

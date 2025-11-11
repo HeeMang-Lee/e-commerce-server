@@ -2,20 +2,17 @@ package com.ecommerce.application.dto;
 
 import com.ecommerce.domain.entity.PointHistory;
 import com.ecommerce.domain.entity.TransactionType;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
 
 import java.time.LocalDateTime;
 
-@Getter
-@AllArgsConstructor
-public class PointHistoryResponse {
-    private Long id;
-    private TransactionType transactionType;
-    private Integer amount;
-    private Integer balanceAfter;
-    private String description;
-    private LocalDateTime createdAt;
+public record PointHistoryResponse(
+    Long id,
+    TransactionType transactionType,
+    Integer amount,
+    Integer balanceAfter,
+    String description,
+    LocalDateTime createdAt
+) {
 
     public static PointHistoryResponse from(PointHistory history) {
         return new PointHistoryResponse(
