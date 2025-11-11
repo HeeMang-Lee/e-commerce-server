@@ -1,9 +1,6 @@
 package com.ecommerce.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -11,133 +8,109 @@ import java.util.List;
 public class CouponPointDto {
 
     // 쿠폰 관련 DTO
-    @Data
-    @NoArgsConstructor
-    @AllArgsConstructor
     @Schema(description = "쿠폰 정보")
-    public static class CouponDto {
+    public record CouponDto(
         @Schema(description = "쿠폰 ID", example = "1")
-        private Long couponId;
+        Long couponId,
 
         @Schema(description = "쿠폰명", example = "10% 할인 쿠폰")
-        private String name;
+        String name,
 
         @Schema(description = "할인 타입", example = "PERCENTAGE")
-        private String discountType;
+        String discountType,
 
         @Schema(description = "할인 값", example = "10")
-        private Integer discountValue;
+        Integer discountValue,
 
         @Schema(description = "최대 할인 금액", example = "10000")
-        private Integer maxDiscountAmount;
-    }
+        Integer maxDiscountAmount
+    ) {}
 
-    @Data
-    @NoArgsConstructor
-    @AllArgsConstructor
     @Schema(description = "사용자 쿠폰 정보")
-    public static class UserCouponDto {
+    public record UserCouponDto(
         @Schema(description = "사용자 쿠폰 ID", example = "1")
-        private Long userCouponId;
+        Long userCouponId,
 
         @Schema(description = "쿠폰 정보")
-        private CouponDto coupon;
+        CouponDto coupon,
 
         @Schema(description = "발급 일시", example = "2024-10-29T10:00:00")
-        private LocalDateTime issuedAt;
+        LocalDateTime issuedAt,
 
         @Schema(description = "만료 일시", example = "2024-11-29T23:59:59")
-        private LocalDateTime expiredAt;
+        LocalDateTime expiredAt,
 
         @Schema(description = "사용 여부", example = "false")
-        private boolean used;
-    }
+        boolean used
+    ) {}
 
-    @Data
-    @NoArgsConstructor
-    @AllArgsConstructor
     @Schema(description = "사용자 쿠폰 목록 응답")
-    public static class UserCouponListResponse {
+    public record UserCouponListResponse(
         @Schema(description = "사용자 쿠폰 목록")
-        private List<UserCouponDto> coupons;
+        List<UserCouponDto> coupons,
 
         @Schema(description = "전체 쿠폰 수", example = "3")
-        private int totalCount;
-    }
+        int totalCount
+    ) {}
 
     // 포인트 관련 DTO
-    @Data
-    @NoArgsConstructor
-    @AllArgsConstructor
     @Schema(description = "포인트 잔액 응답")
-    public static class BalanceResponse {
+    public record BalanceResponse(
         @Schema(description = "사용자 ID", example = "1")
-        private Long userId;
+        Long userId,
 
         @Schema(description = "현재 잔액", example = "50000")
-        private Integer balance;
-    }
+        Integer balance
+    ) {}
 
-    @Data
-    @NoArgsConstructor
-    @AllArgsConstructor
     @Schema(description = "포인트 충전 요청")
-    public static class ChargeRequest {
+    public record ChargeRequest(
         @Schema(description = "충전 금액", example = "10000", required = true)
-        private Integer amount;
-    }
+        Integer amount
+    ) {}
 
-    @Data
-    @NoArgsConstructor
-    @AllArgsConstructor
     @Schema(description = "포인트 충전 응답")
-    public static class ChargeResponse {
+    public record ChargeResponse(
         @Schema(description = "사용자 ID", example = "1")
-        private Long userId;
+        Long userId,
 
         @Schema(description = "충전 금액", example = "10000")
-        private Integer chargedAmount;
+        Integer chargedAmount,
 
         @Schema(description = "현재 잔액", example = "60000")
-        private Integer currentBalance;
+        Integer currentBalance,
 
         @Schema(description = "충전 일시", example = "2024-10-29T14:00:00")
-        private LocalDateTime chargedAt;
-    }
+        LocalDateTime chargedAt
+    ) {}
 
-    @Data
-    @NoArgsConstructor
-    @AllArgsConstructor
     @Schema(description = "포인트 이력")
-    public static class PointHistoryDto {
+    public record PointHistoryDto(
         @Schema(description = "이력 ID", example = "1")
-        private Long historyId;
+        Long historyId,
 
         @Schema(description = "거래 타입", example = "CHARGE")
-        private String transactionType;
+        String transactionType,
 
         @Schema(description = "금액", example = "10000")
-        private Integer amount;
+        Integer amount,
 
         @Schema(description = "잔액", example = "60000")
-        private Integer balance;
+        Integer balance,
 
         @Schema(description = "설명", example = "포인트 충전")
-        private String description;
+        String description,
 
         @Schema(description = "거래 일시", example = "2024-10-29T14:00:00")
-        private LocalDateTime createdAt;
-    }
+        LocalDateTime createdAt
+    ) {}
 
-    @Data
-    @NoArgsConstructor
-    @AllArgsConstructor
     @Schema(description = "포인트 이력 목록 응답")
-    public static class PointHistoryListResponse {
+    public record PointHistoryListResponse(
         @Schema(description = "포인트 이력 목록")
-        private List<PointHistoryDto> histories;
+        List<PointHistoryDto> histories,
 
         @Schema(description = "전체 이력 수", example = "10")
-        private int totalCount;
-    }
+        int totalCount
+    ) {}
 }

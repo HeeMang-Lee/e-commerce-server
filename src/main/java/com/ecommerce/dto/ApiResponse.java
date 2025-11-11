@@ -1,27 +1,21 @@
 package com.ecommerce.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.NoArgsConstructor;
 
-@Data
-@NoArgsConstructor
-@AllArgsConstructor
 @Schema(description = "공통 API 응답")
-public class ApiResponse<T> {
-
+public record ApiResponse<T>(
     @Schema(description = "성공 여부", example = "true")
-    private boolean success;
+    boolean success,
 
     @Schema(description = "응답 코드", example = "COMMON_1000")
-    private String code;
+    String code,
 
     @Schema(description = "응답 데이터")
-    private T data;
+    T data,
 
     @Schema(description = "메시지", example = "요청이 성공적으로 처리되었습니다.")
-    private String message;
+    String message
+) {
 
     // ResponseCode를 사용한 성공 응답
     public static <T> ApiResponse<T> of(ResponseCode responseCode, T data) {
