@@ -19,6 +19,7 @@ erDiagram
         TEXT description
         DECIMAL base_price
         INT stock_quantity
+        VARCHAR category
         VARCHAR status "ACTIVE | INACTIVE | DISCONTINUED"
         TIMESTAMP created_at
         TIMESTAMP updated_at
@@ -64,6 +65,7 @@ erDiagram
         VARCHAR name
         VARCHAR discount_type "PERCENTAGE | FIXED_AMOUNT"
         INT discount_value
+        DECIMAL max_discount_amount
         INT max_issue_count
         INT current_issue_count
         TIMESTAMP issue_start_date
@@ -95,16 +97,25 @@ erDiagram
         TIMESTAMP created_at
     }
 
+    popular_products {
+        BIGINT id PK
+        BIGINT product_id FK
+        INT quantity
+        TIMESTAMP order_time
+        TIMESTAMP created_at
+    }
+
     %% 관계 설정
     users ||--o{ orders : places
     users ||--o{ user_coupons : owns
     users ||--o{ point_histories : has
-    
+
     products ||--o{ order_items : includes
-    
+    products ||--o{ popular_products : tracked_in
+
     orders ||--o{ order_items : contains
     orders ||--|| order_payments : paid_by
-    
+
     coupons ||--o{ user_coupons : issued_as
 ```
 
@@ -122,6 +133,7 @@ erDiagram
 | 6 | coupons | 쿠폰 정책 |
 | 7 | user_coupons | 사용자 보유 쿠폰 |
 | 8 | point_histories | 포인트 이력 |
+| 9 | popular_products | 인기 상품 판매 이력 |
 
 ---
 
@@ -153,12 +165,14 @@ CREATE TABLE products (
                           description TEXT COMMENT '상품 설명',
                           base_price DECIMAL(10,2) NOT NULL COMMENT '기본 가격',
                           stock_quantity INT NOT NULL DEFAULT 0 COMMENT '재고 수량',
+                          category VARCHAR(50) COMMENT '상품 카테고리',
                           status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE' COMMENT '상태: ACTIVE, INACTIVE, DISCONTINUED',
                           created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
                           updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 
                           INDEX idx_status (status),
-                          INDEX idx_stock (stock_quantity)
+                          INDEX idx_stock (stock_quantity),
+                          INDEX idx_category (category)
 ) COMMENT '상품';
 ```
 
@@ -237,6 +251,7 @@ CREATE TABLE coupons (
                          name VARCHAR(100) NOT NULL COMMENT '쿠폰명',
                          discount_type VARCHAR(20) NOT NULL COMMENT '할인 타입: PERCENTAGE, FIXED_AMOUNT',
                          discount_value INT NOT NULL COMMENT '할인 값 (% 또는 금액)',
+                         max_discount_amount DECIMAL(10,2) COMMENT '최대 할인 금액 (PERCENTAGE 타입용)',
                          max_issue_count INT NOT NULL COMMENT '최대 발급 수량',
                          current_issue_count INT NOT NULL DEFAULT 0 COMMENT '현재 발급된 수량',
                          issue_start_date TIMESTAMP NOT NULL COMMENT '발급 시작일',
@@ -291,6 +306,23 @@ CREATE TABLE point_histories (
                                  INDEX idx_order (related_order_id),
                                  INDEX idx_type (transaction_type)
 ) COMMENT '포인트 이력';
+```
+
+---
+
+### 9. popular_products (인기 상품 판매 이력)
+
+```sql
+CREATE TABLE popular_products (
+                                  id BIGINT PRIMARY KEY AUTO_INCREMENT,
+                                  product_id BIGINT NOT NULL COMMENT '상품 ID',
+                                  quantity INT NOT NULL COMMENT '판매 수량',
+                                  order_time TIMESTAMP NOT NULL COMMENT '주문 시간',
+                                  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+                                  INDEX idx_product_time (product_id, order_time),
+                                  INDEX idx_order_time (order_time)
+) COMMENT '인기 상품 판매 이력';
 ```
 
 ---
@@ -355,6 +387,7 @@ CREATE TABLE point_histories (
 | users - user_coupons | 사용자는 여러 쿠폰을 보유할 수 있다 | 1:N |
 | users - point_histories | 사용자는 여러 포인트 이력을 가진다 | 1:N |
 | products - order_items | 상품은 여러 주문에 포함될 수 있다 | 1:N |
+| products - popular_products | 상품은 여러 판매 이력을 가진다 | 1:N |
 | orders - order_items | 주문은 여러 상품을 포함한다 | 1:N |
 | orders - order_payments | 주문은 하나의 결제를 가진다 | 1:1 |
 | coupons - user_coupons | 쿠폰은 여러 사용자에게 발급된다 | 1:N |
