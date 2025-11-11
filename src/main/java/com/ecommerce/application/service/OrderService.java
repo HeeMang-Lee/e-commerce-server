@@ -37,18 +37,18 @@ public class OrderService {
      */
     public OrderResponse createOrder(OrderRequest request) {
         // 1. 사용자 조회
-        User user = userRepository.findById(request.getUserId())
+        User user = userRepository.findById(request.userId())
                 .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다"));
 
         // 2. 재고 확인 및 차감 (동시성 제어)
         List<OrderItem> orderItems = new ArrayList<>();
-        for (OrderRequest.OrderItemRequest itemReq : request.getItems()) {
+        for (OrderRequest.OrderItemRequest itemReq : request.items()) {
             OrderItem orderItem = productRepository.executeWithLock(
-                    itemReq.getProductId(),
+                    itemReq.productId(),
                     product -> {
                         // Read -> Modify -> Save가 락 보호 하에 실행됨
-                        product.reduceStock(itemReq.getQuantity());
-                        return new OrderItem(product, itemReq.getQuantity());
+                        product.reduceStock(itemReq.quantity());
+                        return new OrderItem(product, itemReq.quantity());
                     }
             );
             orderItems.add(orderItem);
@@ -62,21 +62,21 @@ public class OrderService {
         int totalAmount = order.calculateTotalAmount();
         int discountAmount = 0;
 
-        if (request.getUserCouponId() != null) {
-            UserCoupon userCoupon = userCouponRepository.findById(request.getUserCouponId())
+        if (request.userCouponId() != null) {
+            UserCoupon userCoupon = userCouponRepository.findById(request.userCouponId())
                     .orElseThrow(() -> new IllegalArgumentException("쿠폰을 찾을 수 없습니다"));
             // TODO: 쿠폰 타입에 따라 할인 금액 계산 (현재는 0)
             discountAmount = 0;
         }
 
         // 5. 결제를 PENDING 상태로 생성
-        int usedPoint = request.getUsePoint() != null ? request.getUsePoint() : 0;
+        int usedPoint = request.usePoint() != null ? request.usePoint() : 0;
         OrderPayment payment = new OrderPayment(
                 order.getId(),
                 totalAmount,
                 discountAmount,
                 usedPoint,
-                request.getUserCouponId()
+                request.userCouponId()
         );
         // complete()를 호출하지 않아 PENDING 상태 유지
         orderPaymentRepository.save(payment);
@@ -131,7 +131,7 @@ public class OrderService {
 
         try {
             // 4. 포인트 차감
-            int usedPoint = request.getUsePoint() != null ? request.getUsePoint() : 0;
+            int usedPoint = request.usePoint() != null ? request.usePoint() : 0;
             if (usedPoint > 0) {
                 user.deduct(usedPoint);
                 userRepository.save(user);

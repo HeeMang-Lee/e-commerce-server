@@ -31,17 +31,17 @@ public class PointService {
      * @return 충전 후 포인트 정보
      */
     public PointResponse chargePoint(PointChargeRequest request) {
-        User user = userRepository.findById(request.getUserId())
+        User user = userRepository.findById(request.userId())
                 .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다"));
 
-        user.charge(request.getAmount());
+        user.charge(request.amount());
         userRepository.save(user);
 
         // 포인트 이력 저장
         PointHistory history = new PointHistory(
                 user.getId(),
                 TransactionType.CHARGE,
-                request.getAmount(),
+                request.amount(),
                 user.getPointBalance(),
                 "포인트 충전"
         );

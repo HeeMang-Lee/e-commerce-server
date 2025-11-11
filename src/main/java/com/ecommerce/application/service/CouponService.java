@@ -34,7 +34,7 @@ public class CouponService {
     public UserCouponResponse issueCoupon(CouponIssueRequest request) {
         // Lock 보호 하에 Read -> Modify -> Save 실행
         UserCoupon userCoupon = couponRepository.executeWithLock(
-                request.getCouponId(),
+                request.couponId(),
                 coupon -> {
                     // 쿠폰 발급 (동시성 제어된 상태에서 실행)
                     coupon.issue();
@@ -42,8 +42,8 @@ public class CouponService {
                     // 사용자 쿠폰 생성
                     LocalDateTime expiresAt = LocalDateTime.now().plusDays(coupon.getValidPeriodDays());
                     UserCoupon newUserCoupon = new UserCoupon(
-                            request.getUserId(),
-                            request.getCouponId(),
+                            request.userId(),
+                            request.couponId(),
                             expiresAt
                     );
                     userCouponRepository.save(newUserCoupon);
