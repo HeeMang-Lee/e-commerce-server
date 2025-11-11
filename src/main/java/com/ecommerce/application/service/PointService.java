@@ -17,6 +17,8 @@ import java.util.List;
 @RequiredArgsConstructor
 public class PointService {
 
+    private static final String POINT_DESCRIPTION_CHARGE = "포인트 충전";
+
     private final UserRepository userRepository;
     private final PointHistoryRepository pointHistoryRepository;
 
@@ -31,7 +33,7 @@ public class PointService {
                 TransactionType.CHARGE,
                 request.amount(),
                 user.getPointBalance(),
-                "포인트 충전"
+                POINT_DESCRIPTION_CHARGE
         );
         pointHistoryRepository.save(history);
 

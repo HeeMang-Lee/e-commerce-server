@@ -17,6 +17,9 @@ import java.util.List;
 @RequiredArgsConstructor
 public class OrderService {
 
+    private static final String EVENT_TYPE_ORDER_COMPLETED = "ORDER_COMPLETED";
+    private static final String POINT_DESCRIPTION_ORDER_PAYMENT = "주문 결제";
+
     private final UserRepository userRepository;
     private final ProductRepository productRepository;
     private final OrderRepository orderRepository;
@@ -114,7 +117,7 @@ public class OrderService {
                         TransactionType.USE,
                         usedPoint,
                         user.getPointBalance(),
-                        "주문 결제",
+                        POINT_DESCRIPTION_ORDER_PAYMENT,
                         orderId
                 );
                 pointHistoryRepository.save(history);
@@ -151,12 +154,12 @@ public class OrderService {
                     log.info("주문 데이터 전송 성공: orderId={}", order.getId());
                 } else {
                     log.warn("주문 데이터 전송 실패, 아웃박스에 저장: orderId={}", order.getId());
-                    OutboxEvent outboxEvent = new OutboxEvent("ORDER_COMPLETED", orderData);
+                    OutboxEvent outboxEvent = new OutboxEvent(EVENT_TYPE_ORDER_COMPLETED, orderData);
                     outboxEventRepository.save(outboxEvent);
                 }
             } catch (Exception e) {
                 log.error("주문 데이터 전송 중 예외 발생, 아웃박스에 저장: orderId={}", order.getId(), e);
-                OutboxEvent outboxEvent = new OutboxEvent("ORDER_COMPLETED", orderData);
+                OutboxEvent outboxEvent = new OutboxEvent(EVENT_TYPE_ORDER_COMPLETED, orderData);
                 outboxEventRepository.save(outboxEvent);
             }
 
