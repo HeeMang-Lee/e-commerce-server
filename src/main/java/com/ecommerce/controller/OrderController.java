@@ -15,9 +15,6 @@ public class OrderController implements OrderApi {
 
     @Override
     public ApiResponse<OrderDto.Response> createOrder(OrderDto.CreateRequest request) {
-        // 예시: 재고 부족 시 예외 발생
-        // throw new BusinessException(ResponseCode.PRODUCT_OUT_OF_STOCK);
-
         List<OrderDto.OrderItemResponse> items = Arrays.asList(
                 new OrderDto.OrderItemResponse(1L, "무선 키보드", 2, 89000, 178000)
         );
@@ -39,9 +36,6 @@ public class OrderController implements OrderApi {
 
     @Override
     public ApiResponse<OrderDto.Response> getOrder(Long orderId) {
-        // 예시: 주문이 없는 경우 예외 발생
-        // throw new BusinessException(ResponseCode.ORDER_NOT_FOUND);
-
         List<OrderDto.OrderItemResponse> items = Arrays.asList(
                 new OrderDto.OrderItemResponse(1L, "무선 키보드", 2, 89000, 178000)
         );
@@ -81,12 +75,6 @@ public class OrderController implements OrderApi {
 
     @Override
     public ApiResponse<OrderDto.PaymentResponse> processPayment(Long orderId, OrderDto.PaymentRequest request) {
-        // 예시: 이미 결제된 주문인 경우 예외 발생
-        // throw new BusinessException(ResponseCode.ORDER_ALREADY_PAID);
-
-        // 예시: 포인트 부족 시 예외 발생
-        // throw new BusinessException(ResponseCode.POINT_INSUFFICIENT);
-
         OrderDto.PaymentResponse payment = new OrderDto.PaymentResponse(
                 orderId,
                 "COMPLETED",

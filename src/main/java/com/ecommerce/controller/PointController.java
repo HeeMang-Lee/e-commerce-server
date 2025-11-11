@@ -21,14 +21,6 @@ public class PointController implements PointApi {
 
     @Override
     public ApiResponse<CouponPointDto.ChargeResponse> chargePoint(Long userId, CouponPointDto.ChargeRequest request) {
-        // 예시: 유효하지 않은 금액인 경우 예외 발생
-        // if (request.getAmount() <= 0 || request.getAmount() > 1000000) {
-        //     throw new BusinessException(ResponseCode.POINT_INVALID_AMOUNT);
-        // }
-
-        // 예시: 충전 한도 초과 시 예외 발생
-        // throw new BusinessException(ResponseCode.POINT_CHARGE_LIMIT_EXCEEDED);
-
         CouponPointDto.ChargeResponse charge = new CouponPointDto.ChargeResponse(
                 userId,
                 request.amount(),
