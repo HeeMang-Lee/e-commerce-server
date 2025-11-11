@@ -1,6 +1,11 @@
 package com.ecommerce.domain.entity;
 
+import jakarta.persistence.*;
+import lombok.AccessLevel;
 import lombok.Getter;
+import lombok.NoArgsConstructor;
+import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -12,14 +17,32 @@ import java.util.List;
  * ERD 설계에 따라 단순화된 주문 정보만 관리합니다.
  * 결제 관련 로직은 OrderPayment Entity로 분리되었습니다.
  */
+@Entity
+@Table(name = "orders")
 @Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Order {
 
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-    private final Long userId;
-    private final String orderNumber;
-    private final List<OrderItem> items;
-    private final LocalDateTime createdAt;
+
+    @Column(name = "user_id", nullable = false)
+    private Long userId;
+
+    @Column(name = "order_number", nullable = false, unique = true, length = 50)
+    private String orderNumber;
+
+    @OneToMany(cascade = CascadeType.ALL, orphanRemoval = true)
+    @JoinColumn(name = "order_id")
+    private List<OrderItem> items = new ArrayList<>();
+
+    @CreationTimestamp
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private LocalDateTime createdAt;
+
+    @UpdateTimestamp
+    @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 
     /**

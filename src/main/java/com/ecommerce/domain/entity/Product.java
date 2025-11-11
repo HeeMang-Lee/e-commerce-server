@@ -1,7 +1,12 @@
 package com.ecommerce.domain.entity;
 
 import com.ecommerce.domain.vo.Money;
+import jakarta.persistence.*;
+import lombok.AccessLevel;
 import lombok.Getter;
+import lombok.NoArgsConstructor;
+import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.LocalDateTime;
 
@@ -9,17 +14,41 @@ import java.time.LocalDateTime;
  * 상품 도메인 Entity
  * 재고 관리 및 가격 계산 비즈니스 로직을 포함합니다.
  */
+@Entity
+@Table(name = "products")
 @Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Product {
 
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-    private final String name;
-    private final String description;
-    private final Money basePrice;
+
+    @Column(name = "name", nullable = false, length = 200)
+    private String name;
+
+    @Column(name = "description", columnDefinition = "TEXT")
+    private String description;
+
+    @Column(name = "base_price", nullable = false, precision = 10, scale = 2)
+    private Money basePrice;
+
+    @Column(name = "stock_quantity", nullable = false)
     private Integer stockQuantity;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", nullable = false, length = 20)
     private ProductStatus status;
-    private final String category;
-    private final LocalDateTime createdAt;
+
+    @Column(name = "category", length = 50)
+    private String category;
+
+    @CreationTimestamp
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private LocalDateTime createdAt;
+
+    @UpdateTimestamp
+    @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 
     public Product(Long id, String name, String description, Integer basePrice,

@@ -2,7 +2,12 @@ package com.ecommerce.domain.entity;
 
 import com.ecommerce.domain.vo.Email;
 import com.ecommerce.domain.vo.Money;
+import jakarta.persistence.*;
+import lombok.AccessLevel;
 import lombok.Getter;
+import lombok.NoArgsConstructor;
+import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.LocalDateTime;
 
@@ -10,14 +15,31 @@ import java.time.LocalDateTime;
  * 사용자 도메인 Entity
  * 포인트 관리 비즈니스 로직을 포함합니다.
  */
+@Entity
+@Table(name = "users")
 @Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class User {
 
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-    private final String name;
-    private final Email email;
+
+    @Column(name = "name", nullable = false, length = 100)
+    private String name;
+
+    @Column(name = "email", nullable = false, unique = true, length = 255)
+    private Email email;
+
+    @Column(name = "point_balance", nullable = false, precision = 15, scale = 2)
     private Money pointBalance;
-    private final LocalDateTime createdAt;
+
+    @CreationTimestamp
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private LocalDateTime createdAt;
+
+    @UpdateTimestamp
+    @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 
     public User(Long id, String name, String email, Integer pointBalance) {
