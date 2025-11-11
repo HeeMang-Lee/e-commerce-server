@@ -104,6 +104,6 @@ public class Money {
 
     @Override
     public String toString() {
-        return String.format("%d원", amount);
+        return amount + "원";
     }
 }

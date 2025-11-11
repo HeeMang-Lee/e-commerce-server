@@ -60,8 +60,9 @@ public class Order {
     private String generateOrderNumber() {
         LocalDateTime now = LocalDateTime.now();
         String timestamp = now.format(DateTimeFormatter.ofPattern("yyyyMMddHHmmss"));
-        String nanos = String.format("%06d", now.getNano() % 1000000);
-        return String.format("ORD-%s-%s", timestamp, nanos);
+        int nanosValue = now.getNano() % 1000000;
+        String nanos = ("000000" + nanosValue).substring(String.valueOf(nanosValue).length());
+        return "ORD-" + timestamp + "-" + nanos;
     }
 
     /**

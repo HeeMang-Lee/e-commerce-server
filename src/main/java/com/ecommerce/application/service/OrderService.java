@@ -138,11 +138,11 @@ public class OrderService {
                 );
             }
 
-            String orderData = String.format(
-                    "{\"orderId\":%d,\"orderNumber\":\"%s\",\"userId\":%d,\"totalAmount\":%d,\"finalAmount\":%d}",
-                    order.getId(), order.getOrderNumber(), user.getId(),
-                    payment.getOriginalAmount(), payment.getFinalAmount()
-            );
+            String orderData = "{\"orderId\":" + order.getId() +
+                    ",\"orderNumber\":\"" + order.getOrderNumber() +
+                    "\",\"userId\":" + user.getId() +
+                    ",\"totalAmount\":" + payment.getOriginalAmount() +
+                    ",\"finalAmount\":" + payment.getFinalAmount() + "}";
 
             // 외부 전송 실패 시 아웃박스 패턴으로 재시도 보장
             try {

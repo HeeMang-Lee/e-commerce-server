@@ -85,7 +85,7 @@ public class Product {
         }
         if (!hasStock(quantity)) {
             throw new IllegalStateException(
-                    String.format("재고 부족: 현재 재고 %d개, 요청 수량 %d개", this.stockQuantity, quantity)
+                    "재고 부족: 현재 재고 " + this.stockQuantity + "개, 요청 수량 " + quantity + "개"
             );
         }
         this.stockQuantity -= quantity;

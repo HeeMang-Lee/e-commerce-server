@@ -72,8 +72,7 @@ public class User {
         }
         if (!hasPoint(amount)) {
             throw new IllegalStateException(
-                    String.format("포인트 부족: 현재 포인트 %d원, 요청 금액 %d원",
-                            this.pointBalance.getAmount(), amount)
+                    "포인트 부족: 현재 포인트 " + this.pointBalance.getAmount() + "원, 요청 금액 " + amount + "원"
             );
         }
         Money deductAmount = Money.of(amount);
