@@ -57,8 +57,8 @@ class PointServiceTest {
         PointResponse response = pointService.chargePoint(request);
 
         // then
-        assertThat(response.getUserId()).isEqualTo(1L);
-        assertThat(response.getBalance()).isEqualTo(10000);
+        assertThat(response.userId()).isEqualTo(1L);
+        assertThat(response.balance()).isEqualTo(10000);
         verify(userRepository).save(user);
         verify(pointHistoryRepository).save(any(PointHistory.class));
     }
@@ -87,8 +87,8 @@ class PointServiceTest {
         PointResponse response = pointService.getPoint(1L);
 
         // then
-        assertThat(response.getUserId()).isEqualTo(1L);
-        assertThat(response.getBalance()).isEqualTo(5000);
+        assertThat(response.userId()).isEqualTo(1L);
+        assertThat(response.balance()).isEqualTo(5000);
     }
 
     @Test
@@ -119,9 +119,9 @@ class PointServiceTest {
 
         // then
         assertThat(histories).hasSize(2);
-        assertThat(histories.get(0).getTransactionType()).isEqualTo(TransactionType.CHARGE);
-        assertThat(histories.get(0).getAmount()).isEqualTo(10000);
-        assertThat(histories.get(1).getTransactionType()).isEqualTo(TransactionType.USE);
-        assertThat(histories.get(1).getAmount()).isEqualTo(5000);
+        assertThat(histories.get(0).transactionType()).isEqualTo(TransactionType.CHARGE);
+        assertThat(histories.get(0).amount()).isEqualTo(10000);
+        assertThat(histories.get(1).transactionType()).isEqualTo(TransactionType.USE);
+        assertThat(histories.get(1).amount()).isEqualTo(5000);
     }
 }

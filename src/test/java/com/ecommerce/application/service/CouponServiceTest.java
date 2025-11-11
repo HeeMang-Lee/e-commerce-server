@@ -65,9 +65,9 @@ class CouponServiceTest {
         UserCouponResponse response = couponService.issueCoupon(request);
 
         // then
-        assertThat(response.getUserId()).isEqualTo(1L);
-        assertThat(response.getCouponId()).isEqualTo(1L);
-        assertThat(response.getStatus()).isEqualTo(UserCouponStatus.AVAILABLE);
+        assertThat(response.userId()).isEqualTo(1L);
+        assertThat(response.couponId()).isEqualTo(1L);
+        assertThat(response.status()).isEqualTo(UserCouponStatus.AVAILABLE);
         assertThat(coupon.getCurrentIssueCount()).isEqualTo(1); // 발급 횟수 증가 확인
         verify(userCouponRepository).save(any(UserCoupon.class));
     }
@@ -104,7 +104,7 @@ class CouponServiceTest {
 
         // then
         assertThat(coupons).hasSize(2);
-        assertThat(coupons.get(0).getCouponId()).isEqualTo(1L);
-        assertThat(coupons.get(1).getCouponId()).isEqualTo(2L);
+        assertThat(coupons.get(0).couponId()).isEqualTo(1L);
+        assertThat(coupons.get(1).couponId()).isEqualTo(2L);
     }
 }

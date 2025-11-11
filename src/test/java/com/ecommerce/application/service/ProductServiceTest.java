@@ -47,8 +47,8 @@ class ProductServiceTest {
 
         // then
         assertThat(products).hasSize(2);
-        assertThat(products.get(0).getName()).isEqualTo("키보드");
-        assertThat(products.get(1).getName()).isEqualTo("마우스");
+        assertThat(products.get(0).name()).isEqualTo("키보드");
+        assertThat(products.get(1).name()).isEqualTo("마우스");
     }
 
     @Test
@@ -62,10 +62,10 @@ class ProductServiceTest {
         ProductResponse response = productService.getProduct(1L);
 
         // then
-        assertThat(response.getId()).isEqualTo(1L);
-        assertThat(response.getName()).isEqualTo("키보드");
-        assertThat(response.getPrice()).isEqualTo(89000);
-        assertThat(response.getStockQuantity()).isEqualTo(10);
+        assertThat(response.id()).isEqualTo(1L);
+        assertThat(response.name()).isEqualTo("키보드");
+        assertThat(response.price()).isEqualTo(89000);
+        assertThat(response.stockQuantity()).isEqualTo(10);
     }
 
     @Test
@@ -99,8 +99,8 @@ class ProductServiceTest {
 
         // then
         assertThat(topProducts).hasSize(3);
-        assertThat(topProducts.get(0).getName()).isEqualTo("키보드");
-        assertThat(topProducts.get(1).getName()).isEqualTo("마우스");
-        assertThat(topProducts.get(2).getName()).isEqualTo("모니터");
+        assertThat(topProducts.get(0).name()).isEqualTo("키보드");
+        assertThat(topProducts.get(1).name()).isEqualTo("마우스");
+        assertThat(topProducts.get(2).name()).isEqualTo("모니터");
     }
 }

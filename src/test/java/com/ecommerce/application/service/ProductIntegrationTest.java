@@ -68,11 +68,11 @@ class ProductIntegrationTest {
         ProductResponse response = productService.getProduct(1L);
 
         // then
-        assertThat(response.getId()).isEqualTo(1L);
-        assertThat(response.getName()).isEqualTo("키보드");
-        assertThat(response.getDescription()).isEqualTo("무선 키보드");
-        assertThat(response.getPrice()).isEqualTo(89000);
-        assertThat(response.getStockQuantity()).isEqualTo(10);
+        assertThat(response.id()).isEqualTo(1L);
+        assertThat(response.name()).isEqualTo("키보드");
+        assertThat(response.description()).isEqualTo("무선 키보드");
+        assertThat(response.price()).isEqualTo(89000);
+        assertThat(response.stockQuantity()).isEqualTo(10);
     }
 
     @Test
@@ -120,11 +120,11 @@ class ProductIntegrationTest {
 
         // then
         assertThat(topProducts).hasSize(5);
-        assertThat(topProducts.get(0).getName()).isEqualTo("상품1");  // 50개 판매
-        assertThat(topProducts.get(1).getName()).isEqualTo("상품2");  // 40개 판매
-        assertThat(topProducts.get(2).getName()).isEqualTo("상품3");  // 30개 판매
-        assertThat(topProducts.get(3).getName()).isEqualTo("상품4");  // 20개 판매
-        assertThat(topProducts.get(4).getName()).isEqualTo("상품5");  // 10개 판매
+        assertThat(topProducts.get(0).name()).isEqualTo("상품1");  // 50개 판매
+        assertThat(topProducts.get(1).name()).isEqualTo("상품2");  // 40개 판매
+        assertThat(topProducts.get(2).name()).isEqualTo("상품3");  // 30개 판매
+        assertThat(topProducts.get(3).name()).isEqualTo("상품4");  // 20개 판매
+        assertThat(topProducts.get(4).name()).isEqualTo("상품5");  // 10개 판매
     }
 
     @Test
@@ -164,7 +164,7 @@ class ProductIntegrationTest {
 
         // then
         assertThat(topProducts).hasSize(1);
-        assertThat(topProducts.get(0).getName()).isEqualTo("상품1");
+        assertThat(topProducts.get(0).name()).isEqualTo("상품1");
     }
 
     @Test

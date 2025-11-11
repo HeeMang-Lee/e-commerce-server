@@ -57,10 +57,10 @@ class CouponIntegrationTest {
         UserCouponResponse response = couponService.issueCoupon(request);
 
         // then
-        assertThat(response.getUserId()).isEqualTo(1L);
-        assertThat(response.getCouponId()).isEqualTo(coupon.getId());
-        assertThat(response.getStatus()).isEqualTo(com.ecommerce.domain.entity.UserCouponStatus.AVAILABLE);
-        assertThat(response.getExpiresAt()).isAfter(now);
+        assertThat(response.userId()).isEqualTo(1L);
+        assertThat(response.couponId()).isEqualTo(coupon.getId());
+        assertThat(response.status()).isEqualTo(com.ecommerce.domain.entity.UserCouponStatus.AVAILABLE);
+        assertThat(response.expiresAt()).isAfter(now);
     }
 
     @Test
@@ -103,10 +103,10 @@ class CouponIntegrationTest {
 
         // then
         assertThat(user1Coupons).hasSize(1);
-        assertThat(user1Coupons.get(0).getUserId()).isEqualTo(1L);
+        assertThat(user1Coupons.get(0).userId()).isEqualTo(1L);
 
         assertThat(user2Coupons).hasSize(1);
-        assertThat(user2Coupons.get(0).getUserId()).isEqualTo(2L);
+        assertThat(user2Coupons.get(0).userId()).isEqualTo(2L);
     }
 
     @Test
@@ -192,8 +192,8 @@ class CouponIntegrationTest {
 
         // then
         LocalDateTime expectedExpiry = now.plusDays(30);
-        assertThat(response.getExpiresAt()).isAfterOrEqualTo(expectedExpiry.minusSeconds(1));
-        assertThat(response.getExpiresAt()).isBeforeOrEqualTo(expectedExpiry.plusSeconds(1));
+        assertThat(response.expiresAt()).isAfterOrEqualTo(expectedExpiry.minusSeconds(1));
+        assertThat(response.expiresAt()).isBeforeOrEqualTo(expectedExpiry.plusSeconds(1));
     }
 
     @Test
@@ -210,9 +210,9 @@ class CouponIntegrationTest {
         UserCouponResponse response3 = couponService.issueCoupon(new CouponIssueRequest(3L, coupon.getId()));
 
         // then
-        assertThat(response1.getUserId()).isEqualTo(1L);
-        assertThat(response2.getUserId()).isEqualTo(2L);
-        assertThat(response3.getUserId()).isEqualTo(3L);
+        assertThat(response1.userId()).isEqualTo(1L);
+        assertThat(response2.userId()).isEqualTo(2L);
+        assertThat(response3.userId()).isEqualTo(3L);
         assertThat(coupon.getCurrentIssueCount()).isEqualTo(3);
         assertThat(coupon.getRemainingQuantity()).isEqualTo(2);
     }

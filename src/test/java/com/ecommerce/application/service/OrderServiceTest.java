@@ -77,11 +77,11 @@ class OrderServiceTest {
         OrderResponse response = orderService.createOrder(request);
 
         // then
-        assertThat(response.getOrderId()).isEqualTo(1L);
-        assertThat(response.getTotalAmount()).isEqualTo(100000);
-        assertThat(response.getDiscountAmount()).isEqualTo(0);
-        assertThat(response.getUsedPoint()).isEqualTo(0);
-        assertThat(response.getFinalAmount()).isEqualTo(100000);
+        assertThat(response.orderId()).isEqualTo(1L);
+        assertThat(response.totalAmount()).isEqualTo(100000);
+        assertThat(response.discountAmount()).isEqualTo(0);
+        assertThat(response.usedPoint()).isEqualTo(0);
+        assertThat(response.finalAmount()).isEqualTo(100000);
         assertThat(product.getStockQuantity()).isEqualTo(8); // 재고 차감 확인
 
         // 주문 생성 시에는 포인트 차감, 쿠폰 사용, 외부 전송이 발생하지 않음
@@ -111,10 +111,10 @@ class OrderServiceTest {
 
         // then
         assertThat(history).hasSize(1);
-        assertThat(history.get(0).getOrderId()).isEqualTo(1L);
-        assertThat(history.get(0).getTotalAmount()).isEqualTo(100000);
-        assertThat(history.get(0).getItems()).hasSize(1);
-        assertThat(history.get(0).getItems().get(0).getProductName()).isEqualTo("키보드");
+        assertThat(history.get(0).orderId()).isEqualTo(1L);
+        assertThat(history.get(0).totalAmount()).isEqualTo(100000);
+        assertThat(history.get(0).items()).hasSize(1);
+        assertThat(history.get(0).items().get(0).productName()).isEqualTo("키보드");
     }
 
     @Test
@@ -146,9 +146,9 @@ class OrderServiceTest {
         PaymentResponse response = orderService.processPayment(1L, request);
 
         // then
-        assertThat(response.getOrderId()).isEqualTo(1L);
-        assertThat(response.getUsedPoint()).isEqualTo(5000);
-        assertThat(response.getPaymentStatus()).isEqualTo("COMPLETED");
+        assertThat(response.orderId()).isEqualTo(1L);
+        assertThat(response.usedPoint()).isEqualTo(5000);
+        assertThat(response.paymentStatus()).isEqualTo("COMPLETED");
         assertThat(user.getPointBalance()).isEqualTo(5000); // 10000 - 5000
 
         verify(pointHistoryRepository, times(1)).save(any());

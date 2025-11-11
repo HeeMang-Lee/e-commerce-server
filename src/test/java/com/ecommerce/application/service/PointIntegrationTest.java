@@ -48,15 +48,15 @@ class PointIntegrationTest {
         PointResponse response = pointService.chargePoint(request);
 
         // then
-        assertThat(response.getUserId()).isEqualTo(1L);
-        assertThat(response.getBalance()).isEqualTo(10000);
+        assertThat(response.userId()).isEqualTo(1L);
+        assertThat(response.balance()).isEqualTo(10000);
 
         // 이력 확인
         List<PointHistoryResponse> history = pointService.getPointHistory(1L);
         assertThat(history).hasSize(1);
-        assertThat(history.get(0).getTransactionType()).isEqualTo(TransactionType.CHARGE);
-        assertThat(history.get(0).getAmount()).isEqualTo(10000);
-        assertThat(history.get(0).getBalanceAfter()).isEqualTo(10000);
+        assertThat(history.get(0).transactionType()).isEqualTo(TransactionType.CHARGE);
+        assertThat(history.get(0).amount()).isEqualTo(10000);
+        assertThat(history.get(0).balanceAfter()).isEqualTo(10000);
     }
 
     @Test
@@ -72,14 +72,14 @@ class PointIntegrationTest {
         PointResponse response = pointService.chargePoint(new PointChargeRequest(1L, 5000));
 
         // then
-        assertThat(response.getBalance()).isEqualTo(15000); // 5000 + 3000 + 2000 + 5000
+        assertThat(response.balance()).isEqualTo(15000); // 5000 + 3000 + 2000 + 5000
 
         // 이력 확인 (3건)
         List<PointHistoryResponse> history = pointService.getPointHistory(1L);
         assertThat(history).hasSize(3);
-        assertThat(history.get(0).getBalanceAfter()).isEqualTo(8000);
-        assertThat(history.get(1).getBalanceAfter()).isEqualTo(10000);
-        assertThat(history.get(2).getBalanceAfter()).isEqualTo(15000);
+        assertThat(history.get(0).balanceAfter()).isEqualTo(8000);
+        assertThat(history.get(1).balanceAfter()).isEqualTo(10000);
+        assertThat(history.get(2).balanceAfter()).isEqualTo(15000);
     }
 
     @Test
@@ -93,8 +93,8 @@ class PointIntegrationTest {
         PointResponse response = pointService.getPoint(1L);
 
         // then
-        assertThat(response.getUserId()).isEqualTo(1L);
-        assertThat(response.getBalance()).isEqualTo(25000);
+        assertThat(response.userId()).isEqualTo(1L);
+        assertThat(response.balance()).isEqualTo(25000);
     }
 
     @Test
@@ -175,9 +175,9 @@ class PointIntegrationTest {
 
         // then
         assertThat(history).hasSize(2);
-        assertThat(history.get(0).getTransactionType()).isEqualTo(TransactionType.CHARGE);
-        assertThat(history.get(0).getAmount()).isEqualTo(50000);
-        assertThat(history.get(1).getTransactionType()).isEqualTo(TransactionType.USE);
-        assertThat(history.get(1).getAmount()).isEqualTo(10000);
+        assertThat(history.get(0).transactionType()).isEqualTo(TransactionType.CHARGE);
+        assertThat(history.get(0).amount()).isEqualTo(50000);
+        assertThat(history.get(1).transactionType()).isEqualTo(TransactionType.USE);
+        assertThat(history.get(1).amount()).isEqualTo(10000);
     }
 }

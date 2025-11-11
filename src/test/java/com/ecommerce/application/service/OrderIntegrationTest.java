@@ -85,9 +85,9 @@ class OrderIntegrationTest {
         OrderResponse response = orderService.createOrder(request);
 
         // then
-        assertThat(response.getOrderId()).isNotNull();
-        assertThat(response.getTotalAmount()).isEqualTo(190000);  // (50000 * 2) + (30000 * 3)
-        assertThat(response.getFinalAmount()).isEqualTo(190000);
+        assertThat(response.orderId()).isNotNull();
+        assertThat(response.totalAmount()).isEqualTo(190000);  // (50000 * 2) + (30000 * 3)
+        assertThat(response.finalAmount()).isEqualTo(190000);
         assertThat(product1.getStockQuantity()).isEqualTo(8);   // 10 - 2
         assertThat(product2.getStockQuantity()).isEqualTo(17);  // 20 - 3
     }
@@ -117,9 +117,9 @@ class OrderIntegrationTest {
         OrderResponse response = orderService.createOrder(request);
 
         // then
-        assertThat(response.getTotalAmount()).isEqualTo(50000);
+        assertThat(response.totalAmount()).isEqualTo(50000);
         // Note: 실제 할인 로직은 추후 확장
-        assertThat(response.getFinalAmount()).isLessThanOrEqualTo(50000);
+        assertThat(response.finalAmount()).isLessThanOrEqualTo(50000);
     }
 
     @Test
@@ -143,12 +143,12 @@ class OrderIntegrationTest {
 
         // when - 결제 처리
         PaymentRequest paymentRequest = new PaymentRequest(null, 10000);
-        PaymentResponse paymentResponse = orderService.processPayment(orderResponse.getOrderId(), paymentRequest);
+        PaymentResponse paymentResponse = orderService.processPayment(orderResponse.orderId(), paymentRequest);
 
         // then
-        assertThat(orderResponse.getTotalAmount()).isEqualTo(50000);
-        assertThat(paymentResponse.getUsedPoint()).isEqualTo(10000);
-        assertThat(paymentResponse.getPaymentAmount()).isEqualTo(40000);  // 50000 - 10000
+        assertThat(orderResponse.totalAmount()).isEqualTo(50000);
+        assertThat(paymentResponse.usedPoint()).isEqualTo(10000);
+        assertThat(paymentResponse.paymentAmount()).isEqualTo(40000);  // 50000 - 10000
         assertThat(user.getPointBalance()).isEqualTo(90000);    // 100000 - 10000
 
         // 포인트 이력 확인
@@ -207,8 +207,8 @@ class OrderIntegrationTest {
 
         // then
         assertThat(history).hasSize(2);
-        assertThat(history.get(0).getTotalAmount()).isEqualTo(50000);
-        assertThat(history.get(1).getTotalAmount()).isEqualTo(60000);
+        assertThat(history.get(0).totalAmount()).isEqualTo(50000);
+        assertThat(history.get(1).totalAmount()).isEqualTo(60000);
     }
 
     @Test
@@ -234,8 +234,8 @@ class OrderIntegrationTest {
         // then
         List<OrderHistoryResponse> history = orderService.getOrderHistory(1L);
         assertThat(history).hasSize(1);
-        assertThat(history.get(0).getItems().get(0).getProductName()).isEqualTo("키보드");
-        assertThat(history.get(0).getItems().get(0).getPrice()).isEqualTo(50000);
+        assertThat(history.get(0).items().get(0).productName()).isEqualTo("키보드");
+        assertThat(history.get(0).items().get(0).price()).isEqualTo(50000);
     }
 
     @Test
@@ -279,11 +279,11 @@ class OrderIntegrationTest {
 
         // when - 결제 처리 (외부 전송 실패)
         PaymentRequest paymentRequest = new PaymentRequest(null, 0);
-        PaymentResponse paymentResponse = orderService.processPayment(orderResponse.getOrderId(), paymentRequest);
+        PaymentResponse paymentResponse = orderService.processPayment(orderResponse.orderId(), paymentRequest);
 
         // then - 결제는 성공
-        assertThat(paymentResponse.getOrderId()).isNotNull();
-        assertThat(paymentResponse.getPaymentStatus()).isEqualTo("COMPLETED");
+        assertThat(paymentResponse.orderId()).isNotNull();
+        assertThat(paymentResponse.paymentStatus()).isEqualTo("COMPLETED");
 
         // 아웃박스에 이벤트가 저장됨
         List<com.ecommerce.domain.entity.OutboxEvent> events = outboxEventRepository.findByStatus(OutboxStatus.PENDING);
