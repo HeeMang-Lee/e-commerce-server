@@ -9,7 +9,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.stream.Collectors;
 
 @Repository
 public class InMemoryOutboxEventRepository implements OutboxEventRepository {
@@ -30,6 +29,6 @@ public class InMemoryOutboxEventRepository implements OutboxEventRepository {
     public List<OutboxEvent> findByStatus(OutboxStatus status) {
         return store.values().stream()
                 .filter(event -> event.getStatus() == status)
-                .collect(Collectors.toList());
+                .toList();
     }
 }

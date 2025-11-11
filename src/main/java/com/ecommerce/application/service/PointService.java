@@ -12,7 +12,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -48,6 +47,6 @@ public class PointService {
         List<PointHistory> histories = pointHistoryRepository.findByUserId(userId);
         return histories.stream()
                 .map(PointHistoryResponse::from)
-                .collect(Collectors.toList());
+                .toList();
     }
 }

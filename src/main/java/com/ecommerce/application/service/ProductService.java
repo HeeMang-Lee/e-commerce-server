@@ -9,7 +9,6 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.stream.Collectors;
 
 /**
  * 상품 서비스
@@ -29,7 +28,7 @@ public class ProductService {
     public List<ProductResponse> getProducts() {
         return productRepository.findAll().stream()
                 .map(ProductResponse::from)
-                .collect(Collectors.toList());
+                .toList();
     }
 
     /**
@@ -57,6 +56,6 @@ public class ProductService {
         return topProductIds.stream()
                 .map(productRepository::getByIdOrThrow)
                 .map(ProductResponse::from)
-                .collect(Collectors.toList());
+                .toList();
     }
 }

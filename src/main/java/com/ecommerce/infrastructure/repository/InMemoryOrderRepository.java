@@ -9,7 +9,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.stream.Collectors;
 
 /**
  * InMemory Order Repository 구현
@@ -38,6 +37,6 @@ public class InMemoryOrderRepository implements OrderRepository {
     public List<Order> findByUserId(Long userId) {
         return store.values().stream()
                 .filter(order -> order.getUserId().equals(userId))
-                .collect(Collectors.toList());
+                .toList();
     }
 }

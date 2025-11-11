@@ -11,7 +11,6 @@ import org.springframework.stereotype.Service;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -83,7 +82,7 @@ public class OrderService {
         List<Order> orders = orderRepository.findByUserId(userId);
         return orders.stream()
                 .map(OrderHistoryResponse::from)
-                .collect(Collectors.toList());
+                .toList();
     }
 
     public OrderHistoryResponse getOrder(Long orderId) {

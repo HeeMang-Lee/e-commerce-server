@@ -11,7 +11,6 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -48,6 +47,6 @@ public class CouponService {
     public List<UserCouponResponse> getUserCoupons(Long userId) {
         return userCouponRepository.findByUserId(userId).stream()
                 .map(UserCouponResponse::from)
-                .collect(Collectors.toList());
+                .toList();
     }
 }

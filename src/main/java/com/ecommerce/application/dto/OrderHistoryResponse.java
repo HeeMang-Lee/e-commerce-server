@@ -4,7 +4,6 @@ import com.ecommerce.domain.entity.Order;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.stream.Collectors;
 
 public record OrderHistoryResponse(
     Long orderId,
@@ -31,7 +30,7 @@ public record OrderHistoryResponse(
                         item.getSnapshotPrice(),
                         item.getStatus().name()
                 ))
-                .collect(Collectors.toList());
+                .toList();
 
         return new OrderHistoryResponse(
                 order.getId(),

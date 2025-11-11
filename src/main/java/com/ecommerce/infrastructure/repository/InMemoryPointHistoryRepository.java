@@ -8,7 +8,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.stream.Collectors;
 
 /**
  * InMemory PointHistory Repository 구현
@@ -32,6 +31,6 @@ public class InMemoryPointHistoryRepository implements PointHistoryRepository {
     public List<PointHistory> findByUserId(Long userId) {
         return store.values().stream()
                 .filter(history -> history.getUserId().equals(userId))
-                .collect(Collectors.toList());
+                .toList();
     }
 }

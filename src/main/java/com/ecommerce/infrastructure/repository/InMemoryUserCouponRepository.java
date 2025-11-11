@@ -9,7 +9,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.stream.Collectors;
 
 /**
  * InMemory UserCoupon Repository 구현
@@ -38,6 +37,6 @@ public class InMemoryUserCouponRepository implements UserCouponRepository {
     public List<UserCoupon> findByUserId(Long userId) {
         return store.values().stream()
                 .filter(uc -> uc.getUserId().equals(userId))
-                .collect(Collectors.toList());
+                .toList();
     }
 }

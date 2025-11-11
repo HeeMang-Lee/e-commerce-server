@@ -5,8 +5,6 @@ import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.stream.Collectors;
 
 @Repository
 public class InMemoryPopularProductRepository implements PopularProductRepository {
@@ -46,6 +44,6 @@ public class InMemoryPopularProductRepository implements PopularProductRepositor
                 .sorted(Map.Entry.<Long, Integer>comparingByValue().reversed())
                 .limit(limit)
                 .map(Map.Entry::getKey)
-                .collect(Collectors.toList());
+                .toList();
     }
 }
