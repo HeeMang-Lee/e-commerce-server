@@ -1,7 +1,11 @@
 package com.ecommerce.domain.entity;
 
 import com.ecommerce.domain.vo.Money;
+import jakarta.persistence.*;
+import lombok.AccessLevel;
 import lombok.Getter;
+import lombok.NoArgsConstructor;
+import org.hibernate.annotations.CreationTimestamp;
 
 import java.time.LocalDateTime;
 
@@ -9,43 +13,53 @@ import java.time.LocalDateTime;
  * 주문 결제 Entity
  * Order와 1:1 관계로 결제 정보를 분리 관리합니다.
  */
+@Entity
+@Table(name = "order_payments")
 @Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class OrderPayment {
 
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-    private final Long orderId;
-    private final Long userCouponId;       // 사용한 쿠폰 ID (null 가능)
-    private final Money originalAmount;   // 원 금액
-    private final Money discountAmount;   // 쿠폰 할인 금액
-    private final Money usedPoint;        // 사용 포인트
-    private final Money finalAmount;      // 최종 결제 금액
-    private PaymentStatus paymentStatus;
-    private String paymentData;             // 결제 관련 추가 데이터 (JSON)
-    private LocalDateTime paidAt;
-    private final LocalDateTime createdAt;
 
-    /**
-     * 쿠폰 없이 결제를 생성합니다.
-     *
-     * @param orderId 주문 ID
-     * @param originalAmount 원 금액
-     * @param discountAmount 할인 금액
-     * @param usedPoint 사용 포인트
-     */
+    @Column(name = "order_id", nullable = false)
+    private Long orderId;
+
+    @Column(name = "user_coupon_id")
+    private Long userCouponId;
+
+    @Column(name = "original_amount", nullable = false, precision = 15, scale = 2)
+    private Money originalAmount;
+
+    @Column(name = "discount_amount", nullable = false, precision = 15, scale = 2)
+    private Money discountAmount;
+
+    @Column(name = "used_point", nullable = false, precision = 15, scale = 2)
+    private Money usedPoint;
+
+    @Column(name = "final_amount", nullable = false, precision = 15, scale = 2)
+    private Money finalAmount;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "payment_status", nullable = false, length = 20)
+    private PaymentStatus paymentStatus;
+
+    @Column(name = "payment_data", columnDefinition = "TEXT")
+    private String paymentData;
+
+    @Column(name = "paid_at")
+    private LocalDateTime paidAt;
+
+    @CreationTimestamp
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private LocalDateTime createdAt;
+
     public OrderPayment(Long orderId, Integer originalAmount,
                         Integer discountAmount, Integer usedPoint) {
         this(orderId, originalAmount, discountAmount, usedPoint, null);
     }
 
-    /**
-     * 쿠폰을 사용하여 결제를 생성합니다.
-     *
-     * @param orderId 주문 ID
-     * @param originalAmount 원 금액
-     * @param discountAmount 할인 금액
-     * @param usedPoint 사용 포인트
-     * @param userCouponId 사용한 쿠폰 ID
-     */
     public OrderPayment(Long orderId, Integer originalAmount,
                         Integer discountAmount, Integer usedPoint,
                         Long userCouponId) {
@@ -61,9 +75,6 @@ public class OrderPayment {
         this.createdAt = LocalDateTime.now();
     }
 
-    /**
-     * 생성자 파라미터를 검증합니다.
-     */
     private void validateConstructorParams(Long orderId, Integer originalAmount,
                                             Integer discountAmount, Integer usedPoint) {
         if (orderId == null) {
@@ -89,39 +100,22 @@ public class OrderPayment {
         }
     }
 
-    /**
-     * 원 금액을 int로 반환합니다 (하위 호환성)
-     */
     public int getOriginalAmount() {
         return originalAmount.getAmount();
     }
 
-    /**
-     * 할인 금액을 int로 반환합니다 (하위 호환성)
-     */
     public int getDiscountAmount() {
         return discountAmount.getAmount();
     }
 
-    /**
-     * 사용 포인트를 int로 반환합니다 (하위 호환성)
-     */
     public int getUsedPoint() {
         return usedPoint.getAmount();
     }
 
-    /**
-     * 최종 결제 금액을 int로 반환합니다 (하위 호환성)
-     */
     public int getFinalAmount() {
         return finalAmount.getAmount();
     }
 
-    /**
-     * 결제를 완료 처리합니다.
-     *
-     * @throws IllegalStateException 이미 완료된 결제인 경우
-     */
     public void complete() {
         if (this.paymentStatus == PaymentStatus.COMPLETED) {
             throw new IllegalStateException("이미 완료된 결제입니다");
@@ -131,27 +125,14 @@ public class OrderPayment {
         this.paidAt = LocalDateTime.now();
     }
 
-    /**
-     * 결제를 실패 처리합니다.
-     */
     public void fail() {
         this.paymentStatus = PaymentStatus.FAILED;
     }
 
-    /**
-     * 결제 ID를 설정합니다. (Repository에서 저장 후 호출)
-     *
-     * @param id 결제 ID
-     */
     public void setId(Long id) {
         this.id = id;
     }
 
-    /**
-     * 결제 관련 추가 데이터를 설정합니다.
-     *
-     * @param paymentData 결제 데이터 (JSON)
-     */
     public void setPaymentData(String paymentData) {
         this.paymentData = paymentData;
     }

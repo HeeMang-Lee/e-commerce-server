@@ -1,7 +1,11 @@
 package com.ecommerce.domain.entity;
 
 import com.ecommerce.domain.vo.Money;
+import jakarta.persistence.*;
+import lombok.AccessLevel;
 import lombok.Getter;
+import lombok.NoArgsConstructor;
+import org.hibernate.annotations.CreationTimestamp;
 
 import java.time.LocalDateTime;
 
@@ -9,42 +13,44 @@ import java.time.LocalDateTime;
  * 포인트 이력 Entity
  * 포인트 충전/사용/환불 이력을 기록합니다.
  */
+@Entity
+@Table(name = "point_histories")
 @Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class PointHistory {
 
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-    private final Long userId;
-    private final Long relatedOrderId;        // 관련 주문 ID (없을 수 있음)
-    private final TransactionType transactionType;
-    private final Money amount;             // 변동 금액
-    private final Money balanceAfter;       // 변동 후 잔액
-    private final String description;
-    private final LocalDateTime createdAt;
 
-    /**
-     * 주문과 관련 없는 포인트 이력을 생성합니다 (충전 등).
-     *
-     * @param userId 사용자 ID
-     * @param transactionType 거래 타입
-     * @param amount 변동 금액
-     * @param balanceAfter 변동 후 잔액
-     * @param description 설명
-     */
+    @Column(name = "user_id", nullable = false)
+    private Long userId;
+
+    @Column(name = "related_order_id")
+    private Long relatedOrderId;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "transaction_type", nullable = false, length = 20)
+    private TransactionType transactionType;
+
+    @Column(name = "amount", nullable = false, precision = 15, scale = 2)
+    private Money amount;
+
+    @Column(name = "balance_after", nullable = false, precision = 15, scale = 2)
+    private Money balanceAfter;
+
+    @Column(name = "description", length = 500)
+    private String description;
+
+    @CreationTimestamp
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private LocalDateTime createdAt;
+
     public PointHistory(Long userId, TransactionType transactionType,
                         Integer amount, Integer balanceAfter, String description) {
         this(userId, transactionType, amount, balanceAfter, description, null);
     }
 
-    /**
-     * 주문과 관련된 포인트 이력을 생성합니다 (사용, 환불).
-     *
-     * @param userId 사용자 ID
-     * @param transactionType 거래 타입
-     * @param amount 변동 금액
-     * @param balanceAfter 변동 후 잔액
-     * @param description 설명
-     * @param relatedOrderId 관련 주문 ID
-     */
     public PointHistory(Long userId, TransactionType transactionType,
                         Integer amount, Integer balanceAfter,
                         String description, Long relatedOrderId) {
@@ -59,9 +65,6 @@ public class PointHistory {
         this.createdAt = LocalDateTime.now();
     }
 
-    /**
-     * 생성자 파라미터를 검증합니다.
-     */
     private void validateConstructorParams(Long userId, TransactionType transactionType,
                                             Integer amount, Integer balanceAfter) {
         if (userId == null) {
@@ -81,25 +84,14 @@ public class PointHistory {
         }
     }
 
-    /**
-     * 변동 금액을 int로 반환합니다 (하위 호환성)
-     */
     public int getAmount() {
         return amount.getAmount();
     }
 
-    /**
-     * 변동 후 잔액을 int로 반환합니다 (하위 호환성)
-     */
     public int getBalanceAfter() {
         return balanceAfter.getAmount();
     }
 
-    /**
-     * 이력 ID를 설정합니다. (Repository에서 저장 후 호출)
-     *
-     * @param id 이력 ID
-     */
     public void setId(Long id) {
         this.id = id;
     }
