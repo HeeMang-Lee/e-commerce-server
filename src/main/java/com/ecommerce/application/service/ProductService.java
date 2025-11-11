@@ -39,8 +39,7 @@ public class ProductService {
      * @return 상품 정보
      */
     public ProductResponse getProduct(Long productId) {
-        Product product = productRepository.findById(productId)
-                .orElseThrow(() -> new IllegalArgumentException("상품을 찾을 수 없습니다"));
+        Product product = productRepository.getByIdOrThrow(productId);
         return ProductResponse.from(product);
     }
 
@@ -56,8 +55,7 @@ public class ProductService {
         List<Long> topProductIds = popularProductRepository.getTopProductIds(startTime, endTime, 5);
 
         return topProductIds.stream()
-                .map(productId -> productRepository.findById(productId)
-                        .orElseThrow(() -> new IllegalArgumentException("상품을 찾을 수 없습니다")))
+                .map(productRepository::getByIdOrThrow)
                 .map(ProductResponse::from)
                 .collect(Collectors.toList());
     }

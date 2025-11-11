@@ -33,8 +33,7 @@ public class OrderService {
      * 실제 결제 처리는 processPayment에서 수행됩니다.
      */
     public OrderResponse createOrder(OrderRequest request) {
-        User user = userRepository.findById(request.userId())
-                .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다"));
+        User user = userRepository.getByIdOrThrow(request.userId());
 
         List<OrderItem> orderItems = new ArrayList<>();
         for (OrderRequest.OrderItemRequest itemReq : request.items()) {
@@ -55,8 +54,7 @@ public class OrderService {
         int discountAmount = 0;
 
         if (request.userCouponId() != null) {
-            UserCoupon userCoupon = userCouponRepository.findById(request.userCouponId())
-                    .orElseThrow(() -> new IllegalArgumentException("쿠폰을 찾을 수 없습니다"));
+            UserCoupon userCoupon = userCouponRepository.getByIdOrThrow(request.userCouponId());
             // TODO: 쿠폰 타입에 따라 할인 금액 계산
             discountAmount = 0;
         }
@@ -89,8 +87,7 @@ public class OrderService {
     }
 
     public OrderHistoryResponse getOrder(Long orderId) {
-        Order order = orderRepository.findById(orderId)
-                .orElseThrow(() -> new IllegalArgumentException("주문을 찾을 수 없습니다"));
+        Order order = orderRepository.getByIdOrThrow(orderId);
         return OrderHistoryResponse.from(order);
     }
 
@@ -100,14 +97,9 @@ public class OrderService {
      * 실패 시 재고를 복구합니다.
      */
     public PaymentResponse processPayment(Long orderId, PaymentRequest request) {
-        Order order = orderRepository.findById(orderId)
-                .orElseThrow(() -> new IllegalArgumentException("주문을 찾을 수 없습니다"));
-
-        User user = userRepository.findById(order.getUserId())
-                .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다"));
-
-        OrderPayment payment = orderPaymentRepository.findByOrderId(orderId)
-                .orElseThrow(() -> new IllegalArgumentException("결제 정보를 찾을 수 없습니다"));
+        Order order = orderRepository.getByIdOrThrow(orderId);
+        User user = userRepository.getByIdOrThrow(order.getUserId());
+        OrderPayment payment = orderPaymentRepository.getByOrderIdOrThrow(orderId);
 
         if (payment.getPaymentStatus() == PaymentStatus.COMPLETED) {
             throw new IllegalStateException("이미 완료된 결제입니다");
@@ -130,8 +122,7 @@ public class OrderService {
             }
 
             if (payment.getUserCouponId() != null) {
-                UserCoupon userCoupon = userCouponRepository.findById(payment.getUserCouponId())
-                        .orElseThrow(() -> new IllegalArgumentException("쿠폰을 찾을 수 없습니다"));
+                UserCoupon userCoupon = userCouponRepository.getByIdOrThrow(payment.getUserCouponId());
                 userCoupon.use();
                 userCouponRepository.save(userCoupon);
             }

@@ -22,8 +22,7 @@ public class PointService {
     private final PointHistoryRepository pointHistoryRepository;
 
     public PointResponse chargePoint(PointChargeRequest request) {
-        User user = userRepository.findById(request.userId())
-                .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다"));
+        User user = userRepository.getByIdOrThrow(request.userId());
 
         user.charge(request.amount());
         userRepository.save(user);
@@ -41,9 +40,7 @@ public class PointService {
     }
 
     public PointResponse getPoint(Long userId) {
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다"));
-
+        User user = userRepository.getByIdOrThrow(userId);
         return new PointResponse(user.getId(), user.getPointBalance());
     }
 

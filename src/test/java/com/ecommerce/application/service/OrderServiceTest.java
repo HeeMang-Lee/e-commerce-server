@@ -58,7 +58,7 @@ class OrderServiceTest {
         OrderRequest.OrderItemRequest itemReq = new OrderRequest.OrderItemRequest(1L, 2);
         OrderRequest request = new OrderRequest(1L, Arrays.asList(itemReq), null, null);
 
-        when(userRepository.findById(1L)).thenReturn(Optional.of(user));
+        when(userRepository.getByIdOrThrow(1L)).thenReturn(user);
 
         // executeWithLock 모킹: Function을 받아서 실행
         when(productRepository.executeWithLock(eq(1L), any())).thenAnswer(invocation -> {
@@ -134,9 +134,9 @@ class OrderServiceTest {
 
         PaymentRequest request = new PaymentRequest(null, 5000);
 
-        when(orderRepository.findById(1L)).thenReturn(Optional.of(order));
-        when(userRepository.findById(1L)).thenReturn(Optional.of(user));
-        when(orderPaymentRepository.findByOrderId(1L)).thenReturn(Optional.of(payment));
+        when(orderRepository.getByIdOrThrow(1L)).thenReturn(order);
+        when(userRepository.getByIdOrThrow(1L)).thenReturn(user);
+        when(orderPaymentRepository.getByOrderIdOrThrow(1L)).thenReturn(payment);
         when(orderPaymentRepository.save(any(OrderPayment.class))).thenAnswer(inv -> inv.getArgument(0));
         when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
         when(pointHistoryRepository.save(any(PointHistory.class))).thenAnswer(inv -> inv.getArgument(0));

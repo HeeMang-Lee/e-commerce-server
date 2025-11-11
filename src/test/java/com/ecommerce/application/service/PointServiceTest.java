@@ -49,7 +49,7 @@ class PointServiceTest {
     void chargePoint() {
         // given
         PointChargeRequest request = new PointChargeRequest(1L, 10000);
-        when(userRepository.findById(1L)).thenReturn(Optional.of(user));
+        when(userRepository.getByIdOrThrow(1L)).thenReturn(user);
         when(userRepository.save(any(User.class))).thenReturn(user);
         when(pointHistoryRepository.save(any(PointHistory.class))).thenReturn(null);
 
@@ -68,12 +68,13 @@ class PointServiceTest {
     void chargePoint_UserNotFound() {
         // given
         PointChargeRequest request = new PointChargeRequest(999L, 10000);
-        when(userRepository.findById(999L)).thenReturn(Optional.empty());
+        when(userRepository.getByIdOrThrow(999L)).thenThrow(new IllegalArgumentException("사용자를 찾을 수 없습니다: 999"));
 
         // when & then
         assertThatThrownBy(() -> pointService.chargePoint(request))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("사용자를 찾을 수 없습니다");
+                .hasMessageContaining("사용자를 찾을 수 없습니다")
+                .hasMessageContaining("999");
     }
 
     @Test
@@ -81,7 +82,7 @@ class PointServiceTest {
     void getPoint() {
         // given
         user.charge(5000);
-        when(userRepository.findById(1L)).thenReturn(Optional.of(user));
+        when(userRepository.getByIdOrThrow(1L)).thenReturn(user);
 
         // when
         PointResponse response = pointService.getPoint(1L);
@@ -95,12 +96,13 @@ class PointServiceTest {
     @DisplayName("존재하지 않는 사용자의 포인트는 조회할 수 없다")
     void getPoint_UserNotFound() {
         // given
-        when(userRepository.findById(999L)).thenReturn(Optional.empty());
+        when(userRepository.getByIdOrThrow(999L)).thenThrow(new IllegalArgumentException("사용자를 찾을 수 없습니다: 999"));
 
         // when & then
         assertThatThrownBy(() -> pointService.getPoint(999L))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("사용자를 찾을 수 없습니다");
+                .hasMessageContaining("사용자를 찾을 수 없습니다")
+                .hasMessageContaining("999");
     }
 
     @Test

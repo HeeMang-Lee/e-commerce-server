@@ -56,7 +56,7 @@ class ProductServiceTest {
     void getProduct() {
         // given
         Product product = new Product(1L, "키보드", "무선 키보드", 89000, 10, "전자제품");
-        when(productRepository.findById(1L)).thenReturn(Optional.of(product));
+        when(productRepository.getByIdOrThrow(1L)).thenReturn(product);
 
         // when
         ProductResponse response = productService.getProduct(1L);
@@ -72,12 +72,13 @@ class ProductServiceTest {
     @DisplayName("존재하지 않는 상품은 조회할 수 없다")
     void getProduct_NotFound() {
         // given
-        when(productRepository.findById(999L)).thenReturn(Optional.empty());
+        when(productRepository.getByIdOrThrow(999L)).thenThrow(new IllegalArgumentException("상품을 찾을 수 없습니다: 999"));
 
         // when & then
         assertThatThrownBy(() -> productService.getProduct(999L))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("상품을 찾을 수 없습니다");
+                .hasMessageContaining("상품을 찾을 수 없습니다")
+                .hasMessageContaining("999");
     }
 
     @Test
@@ -90,9 +91,9 @@ class ProductServiceTest {
 
         when(popularProductRepository.getTopProductIds(any(LocalDateTime.class), any(LocalDateTime.class), anyInt()))
                 .thenReturn(Arrays.asList(1L, 2L, 3L));
-        when(productRepository.findById(1L)).thenReturn(Optional.of(product1));
-        when(productRepository.findById(2L)).thenReturn(Optional.of(product2));
-        when(productRepository.findById(3L)).thenReturn(Optional.of(product3));
+        when(productRepository.getByIdOrThrow(1L)).thenReturn(product1);
+        when(productRepository.getByIdOrThrow(2L)).thenReturn(product2);
+        when(productRepository.getByIdOrThrow(3L)).thenReturn(product3);
 
         // when
         List<ProductResponse> topProducts = productService.getTopProductsLast3Days();
