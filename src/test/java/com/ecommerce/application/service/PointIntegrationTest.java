@@ -3,6 +3,7 @@ package com.ecommerce.application.service;
 import com.ecommerce.application.dto.PointChargeRequest;
 import com.ecommerce.application.dto.PointHistoryResponse;
 import com.ecommerce.application.dto.PointResponse;
+import com.ecommerce.config.TestcontainersConfig;
 import com.ecommerce.domain.entity.TransactionType;
 import com.ecommerce.domain.entity.User;
 import com.ecommerce.domain.repository.PointHistoryRepository;
@@ -12,6 +13,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
+import org.springframework.test.context.ActiveProfiles;
 
 import java.util.List;
 
@@ -22,6 +25,8 @@ import static org.assertj.core.api.Assertions.*;
  * 포인트 충전, 조회, 이력 조회 기능을 통합적으로 검증합니다.
  */
 @SpringBootTest
+@ActiveProfiles("test")
+@Import(TestcontainersConfig.class)
 @DisplayName("포인트 통합 테스트")
 class PointIntegrationTest {
 

@@ -2,6 +2,7 @@ package com.ecommerce.application.service;
 
 import com.ecommerce.application.dto.CouponIssueRequest;
 import com.ecommerce.application.dto.UserCouponResponse;
+import com.ecommerce.config.TestcontainersConfig;
 import com.ecommerce.domain.entity.Coupon;
 import com.ecommerce.domain.entity.DiscountType;
 import com.ecommerce.infrastructure.persistence.repository.JpaCouponRepository;
@@ -11,6 +12,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
+import org.springframework.test.context.ActiveProfiles;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -22,6 +25,8 @@ import static org.assertj.core.api.Assertions.*;
  * 쿠폰 발급, 조회, 만료 등 기본 기능을 통합적으로 검증합니다.
  */
 @SpringBootTest
+@ActiveProfiles("test")
+@Import(TestcontainersConfig.class)
 @DisplayName("쿠폰 통합 테스트")
 class CouponIntegrationTest {
 

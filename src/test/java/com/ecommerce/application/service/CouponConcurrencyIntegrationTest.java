@@ -1,6 +1,7 @@
 package com.ecommerce.application.service;
 
 import com.ecommerce.application.dto.CouponIssueRequest;
+import com.ecommerce.config.TestcontainersConfig;
 import com.ecommerce.domain.entity.Coupon;
 import com.ecommerce.domain.entity.DiscountType;
 import com.ecommerce.domain.repository.CouponRepository;
@@ -10,6 +11,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
+import org.springframework.test.context.ActiveProfiles;
 
 import java.time.LocalDateTime;
 import java.util.concurrent.CountDownLatch;
@@ -26,6 +29,8 @@ import static org.assertj.core.api.Assertions.*;
  * MySQL 데이터베이스와 실제 JPA repository를 사용하여 테스트합니다.
  */
 @SpringBootTest
+@ActiveProfiles("test")
+@Import(TestcontainersConfig.class)
 @DisplayName("쿠폰 발급 동시성 통합 테스트")
 class CouponConcurrencyIntegrationTest {
 

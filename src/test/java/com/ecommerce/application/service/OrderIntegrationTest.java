@@ -1,6 +1,7 @@
 package com.ecommerce.application.service;
 
 import com.ecommerce.application.dto.*;
+import com.ecommerce.config.TestcontainersConfig;
 import com.ecommerce.domain.entity.*;
 import com.ecommerce.domain.repository.*;
 import com.ecommerce.infrastructure.external.DataPlatformService;
@@ -10,6 +11,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.context.annotation.Import;
+import org.springframework.test.context.ActiveProfiles;
 
 import java.time.LocalDateTime;
 import java.util.Arrays;
@@ -24,6 +27,8 @@ import static org.mockito.Mockito.when;
  * 주문 생성부터 결제, 쿠폰/포인트 사용, 이력 조회까지 전체 시나리오를 검증합니다.
  */
 @SpringBootTest
+@ActiveProfiles("test")
+@Import(TestcontainersConfig.class)
 @DisplayName("주문 전체 플로우 통합 테스트")
 class OrderIntegrationTest {
 

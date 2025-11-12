@@ -1,6 +1,7 @@
 package com.ecommerce.application.service;
 
 import com.ecommerce.application.dto.OrderRequest;
+import com.ecommerce.config.TestcontainersConfig;
 import com.ecommerce.domain.entity.Product;
 import com.ecommerce.domain.entity.User;
 import com.ecommerce.domain.repository.*;
@@ -11,6 +12,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.context.annotation.Import;
+import org.springframework.test.context.ActiveProfiles;
 
 import java.util.Arrays;
 import java.util.concurrent.CountDownLatch;
@@ -29,6 +32,8 @@ import static org.mockito.Mockito.when;
  * MySQL 데이터베이스와 실제 JPA repository를 사용하여 테스트합니다.
  */
 @SpringBootTest
+@ActiveProfiles("test")
+@Import(TestcontainersConfig.class)
 @DisplayName("재고 차감 동시성 통합 테스트")
 class ProductStockConcurrencyIntegrationTest {
 
