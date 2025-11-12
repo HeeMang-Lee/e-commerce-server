@@ -32,6 +32,11 @@ public class ProductRepositoryImpl implements ProductRepository {
     }
 
     @Override
+    public void deleteAll() {
+        jpaProductRepository.deleteAll();
+    }
+
+    @Override
     @Transactional
     public <R> R executeWithLock(Long productId, Function<Product, R> operation) {
         Product product = jpaProductRepository.findByIdWithLock(productId)

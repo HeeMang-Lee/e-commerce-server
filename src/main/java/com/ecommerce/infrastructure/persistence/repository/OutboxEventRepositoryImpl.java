@@ -23,4 +23,9 @@ public class OutboxEventRepositoryImpl implements OutboxEventRepository {
     public List<OutboxEvent> findByStatus(OutboxStatus status) {
         return jpaOutboxEventRepository.findByStatus(status);
     }
+
+    @Override
+    public void deleteAll() {
+        jpaOutboxEventRepository.deleteAll();
+    }
 }

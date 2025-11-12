@@ -22,4 +22,9 @@ public class PointHistoryRepositoryImpl implements PointHistoryRepository {
     public List<PointHistory> findByUserId(Long userId) {
         return jpaPointHistoryRepository.findByUserId(userId);
     }
+
+    @Override
+    public void deleteAll() {
+        jpaPointHistoryRepository.deleteAll();
+    }
 }

@@ -27,4 +27,9 @@ public class OrderPaymentRepositoryImpl implements OrderPaymentRepository {
     public Optional<OrderPayment> findByOrderId(Long orderId) {
         return jpaOrderPaymentRepository.findByOrderId(orderId);
     }
+
+    @Override
+    public void deleteAll() {
+        jpaOrderPaymentRepository.deleteAll();
+    }
 }

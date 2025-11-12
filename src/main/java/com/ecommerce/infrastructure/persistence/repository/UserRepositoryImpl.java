@@ -28,4 +28,9 @@ public class UserRepositoryImpl implements UserRepository {
     public Optional<User> findByEmail(String email) {
         return jpaUserRepository.findByEmail(Email.of(email));
     }
+
+    @Override
+    public void deleteAll() {
+        jpaUserRepository.deleteAll();
+    }
 }

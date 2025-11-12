@@ -27,4 +27,9 @@ public class OrderItemRepositoryImpl implements OrderItemRepository {
     public List<OrderItem> findByOrderId(Long orderId) {
         return jpaOrderItemRepository.findByOrderId(orderId);
     }
+
+    @Override
+    public void deleteAll() {
+        jpaOrderItemRepository.deleteAll();
+    }
 }

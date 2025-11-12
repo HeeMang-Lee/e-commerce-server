@@ -42,4 +42,9 @@ public class CouponRepositoryImpl implements CouponRepository {
 
         return result;
     }
+
+    @Override
+    public void deleteAll() {
+        jpaCouponRepository.deleteAll();
+    }
 }

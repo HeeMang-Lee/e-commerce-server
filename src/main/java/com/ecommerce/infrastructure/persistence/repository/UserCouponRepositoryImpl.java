@@ -28,4 +28,9 @@ public class UserCouponRepositoryImpl implements UserCouponRepository {
     public List<UserCoupon> findByUserId(Long userId) {
         return jpaUserCouponRepository.findByUserId(userId);
     }
+
+    @Override
+    public void deleteAll() {
+        jpaUserCouponRepository.deleteAll();
+    }
 }

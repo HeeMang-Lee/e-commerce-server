@@ -19,6 +19,8 @@ public interface ProductRepository {
 
     List<Product> findAll();
 
+    void deleteAll();
+
     /**
      * 동시성 제어를 위한 락 기반 트랜잭션 실행
      * Read -> Modify -> Save 전체 구간을 락으로 보호합니다.

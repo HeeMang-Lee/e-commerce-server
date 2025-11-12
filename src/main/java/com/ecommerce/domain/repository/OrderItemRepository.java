@@ -11,4 +11,6 @@ public interface OrderItemRepository {
     List<OrderItem> saveAll(List<OrderItem> orderItems);
 
     List<OrderItem> findByOrderId(Long orderId);
+
+    void deleteAll();
 }
