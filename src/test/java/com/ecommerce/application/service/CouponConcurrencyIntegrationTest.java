@@ -1,17 +1,15 @@
 package com.ecommerce.application.service;
 
 import com.ecommerce.application.dto.CouponIssueRequest;
-import com.ecommerce.application.dto.UserCouponResponse;
 import com.ecommerce.domain.entity.Coupon;
 import com.ecommerce.domain.entity.DiscountType;
-import com.ecommerce.domain.entity.UserCoupon;
 import com.ecommerce.domain.repository.CouponRepository;
 import com.ecommerce.domain.repository.UserCouponRepository;
-import com.ecommerce.infrastructure.repository.InMemoryCouponRepository;
-import com.ecommerce.infrastructure.repository.InMemoryUserCouponRepository;
-import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
 
 import java.time.LocalDateTime;
 import java.util.concurrent.CountDownLatch;
@@ -25,19 +23,25 @@ import static org.assertj.core.api.Assertions.*;
 /**
  * 쿠폰 발급 동시성 통합 테스트
  * ExecutorService를 사용하여 멀티스레드 환경에서 동시성 제어를 검증합니다.
+ * MySQL 데이터베이스와 실제 JPA repository를 사용하여 테스트합니다.
  */
+@SpringBootTest
 @DisplayName("쿠폰 발급 동시성 통합 테스트")
 class CouponConcurrencyIntegrationTest {
 
+    @Autowired
     private CouponRepository couponRepository;
+
+    @Autowired
     private UserCouponRepository userCouponRepository;
+
+    @Autowired
     private CouponService couponService;
 
-    @BeforeEach
-    void setUp() {
-        couponRepository = new InMemoryCouponRepository();
-        userCouponRepository = new InMemoryUserCouponRepository();
-        couponService = new CouponService(couponRepository, userCouponRepository);
+    @AfterEach
+    void tearDown() {
+        userCouponRepository.deleteAll();
+        couponRepository.deleteAll();
     }
 
     @Test
@@ -54,7 +58,7 @@ class CouponConcurrencyIntegrationTest {
                 now.plusDays(30),
                 30
         );
-        couponRepository.save(coupon);
+        Coupon savedCoupon = couponRepository.save(coupon);
 
         int threadCount = 100;  // 100명이 시도
         ExecutorService executorService = Executors.newFixedThreadPool(threadCount);
@@ -71,7 +75,7 @@ class CouponConcurrencyIntegrationTest {
                 try {
                     startLatch.await();  // 모든 스레드가 동시에 시작하도록 대기
 
-                    CouponIssueRequest request = new CouponIssueRequest(userId, coupon.getId());
+                    CouponIssueRequest request = new CouponIssueRequest(userId, savedCoupon.getId());
                     couponService.issueCoupon(request);
                     successCount.incrementAndGet();
 
@@ -91,10 +95,11 @@ class CouponConcurrencyIntegrationTest {
         executorService.shutdown();
 
         // then
+        Coupon resultCoupon = couponRepository.findById(savedCoupon.getId()).orElseThrow();
         assertThat(successCount.get()).isEqualTo(50);  // 정확히 50명만 성공
         assertThat(failCount.get()).isEqualTo(50);     // 나머지 50명은 실패
-        assertThat(coupon.getCurrentIssueCount()).isEqualTo(50);  // 발급 횟수 확인
-        assertThat(coupon.getRemainingQuantity()).isEqualTo(0);   // 남은 수량 0
+        assertThat(resultCoupon.getCurrentIssueCount()).isEqualTo(50);  // 발급 횟수 확인
+        assertThat(resultCoupon.getRemainingQuantity()).isEqualTo(0);   // 남은 수량 0
     }
 
     @Test
@@ -111,7 +116,7 @@ class CouponConcurrencyIntegrationTest {
                 now.plusDays(30),
                 30
         );
-        couponRepository.save(coupon);
+        Coupon savedCoupon = couponRepository.save(coupon);
 
         int threadCount = 10;  // 동일 사용자가 10번 시도
         long userId = 1L;
@@ -127,7 +132,7 @@ class CouponConcurrencyIntegrationTest {
                 try {
                     startLatch.await();
 
-                    CouponIssueRequest request = new CouponIssueRequest(userId, coupon.getId());
+                    CouponIssueRequest request = new CouponIssueRequest(userId, savedCoupon.getId());
                     couponService.issueCoupon(request);
                     successCount.incrementAndGet();
 
@@ -144,10 +149,11 @@ class CouponConcurrencyIntegrationTest {
         executorService.shutdown();
 
         // then
+        Coupon resultCoupon = couponRepository.findById(savedCoupon.getId()).orElseThrow();
         // 현재 구현에서는 중복 발급 체크가 없으므로 여러 번 성공할 수 있음
         // 실제 비즈니스 로직에서는 UserCoupon의 (userId, couponId) 유니크 제약이 필요
         assertThat(successCount.get()).isGreaterThan(0);  // 최소 1번은 성공
-        assertThat(coupon.getCurrentIssueCount()).isEqualTo(successCount.get());
+        assertThat(resultCoupon.getCurrentIssueCount()).isEqualTo(successCount.get());
     }
 
     @Test
@@ -164,7 +170,7 @@ class CouponConcurrencyIntegrationTest {
                 now.plusDays(30),
                 30
         );
-        couponRepository.save(coupon);
+        Coupon savedCoupon = couponRepository.save(coupon);
 
         int threadCount = 50;  // 50명이 시도
         ExecutorService executorService = Executors.newFixedThreadPool(threadCount);
@@ -181,7 +187,7 @@ class CouponConcurrencyIntegrationTest {
                 try {
                     startLatch.await();
 
-                    CouponIssueRequest request = new CouponIssueRequest(userId, coupon.getId());
+                    CouponIssueRequest request = new CouponIssueRequest(userId, savedCoupon.getId());
                     couponService.issueCoupon(request);
                     successCount.incrementAndGet();
 
@@ -200,9 +206,10 @@ class CouponConcurrencyIntegrationTest {
         executorService.shutdown();
 
         // then
+        Coupon resultCoupon = couponRepository.findById(savedCoupon.getId()).orElseThrow();
         assertThat(successCount.get()).isEqualTo(1);   // 정확히 1명만 성공
         assertThat(failCount.get()).isEqualTo(49);     // 나머지 49명은 실패
-        assertThat(coupon.getCurrentIssueCount()).isEqualTo(1);
-        assertThat(coupon.getRemainingQuantity()).isEqualTo(0);
+        assertThat(resultCoupon.getCurrentIssueCount()).isEqualTo(1);
+        assertThat(resultCoupon.getRemainingQuantity()).isEqualTo(0);
     }
 }

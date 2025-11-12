@@ -4,13 +4,13 @@ import com.ecommerce.application.dto.CouponIssueRequest;
 import com.ecommerce.application.dto.UserCouponResponse;
 import com.ecommerce.domain.entity.Coupon;
 import com.ecommerce.domain.entity.DiscountType;
-import com.ecommerce.domain.repository.CouponRepository;
-import com.ecommerce.domain.repository.UserCouponRepository;
-import com.ecommerce.infrastructure.repository.InMemoryCouponRepository;
-import com.ecommerce.infrastructure.repository.InMemoryUserCouponRepository;
-import org.junit.jupiter.api.BeforeEach;
+import com.ecommerce.infrastructure.persistence.repository.JpaCouponRepository;
+import com.ecommerce.infrastructure.persistence.repository.JpaUserCouponRepository;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -21,18 +21,23 @@ import static org.assertj.core.api.Assertions.*;
  * 쿠폰 통합 테스트
  * 쿠폰 발급, 조회, 만료 등 기본 기능을 통합적으로 검증합니다.
  */
+@SpringBootTest
 @DisplayName("쿠폰 통합 테스트")
 class CouponIntegrationTest {
 
-    private CouponRepository couponRepository;
-    private UserCouponRepository userCouponRepository;
+    @Autowired
+    private JpaCouponRepository couponRepository;
+
+    @Autowired
+    private JpaUserCouponRepository userCouponRepository;
+
+    @Autowired
     private CouponService couponService;
 
-    @BeforeEach
-    void setUp() {
-        couponRepository = new InMemoryCouponRepository();
-        userCouponRepository = new InMemoryUserCouponRepository();
-        couponService = new CouponService(couponRepository, userCouponRepository);
+    @AfterEach
+    void tearDown() {
+        userCouponRepository.deleteAll();
+        couponRepository.deleteAll();
     }
 
     @Test
@@ -49,16 +54,16 @@ class CouponIntegrationTest {
                 now.plusDays(30),
                 30
         );
-        couponRepository.save(coupon);
+        Coupon savedCoupon = couponRepository.save(coupon);
 
-        CouponIssueRequest request = new CouponIssueRequest(1L, coupon.getId());
+        CouponIssueRequest request = new CouponIssueRequest(1L, savedCoupon.getId());
 
         // when
         UserCouponResponse response = couponService.issueCoupon(request);
 
         // then
         assertThat(response.userId()).isEqualTo(1L);
-        assertThat(response.couponId()).isEqualTo(coupon.getId());
+        assertThat(response.couponId()).isEqualTo(savedCoupon.getId());
         assertThat(response.status()).isEqualTo(com.ecommerce.domain.entity.UserCouponStatus.AVAILABLE);
         assertThat(response.expiresAt()).isAfter(now);
     }
@@ -70,12 +75,12 @@ class CouponIntegrationTest {
         LocalDateTime now = LocalDateTime.now();
         Coupon coupon1 = new Coupon("쿠폰1", DiscountType.PERCENTAGE, 10, 100, now.minusDays(1), now.plusDays(30), 30);
         Coupon coupon2 = new Coupon("쿠폰2", DiscountType.FIXED_AMOUNT, 5000, 100, now.minusDays(1), now.plusDays(30), 30);
-        couponRepository.save(coupon1);
-        couponRepository.save(coupon2);
+        Coupon savedCoupon1 = couponRepository.save(coupon1);
+        Coupon savedCoupon2 = couponRepository.save(coupon2);
 
         // 사용자에게 쿠폰 발급
-        couponService.issueCoupon(new CouponIssueRequest(1L, coupon1.getId()));
-        couponService.issueCoupon(new CouponIssueRequest(1L, coupon2.getId()));
+        couponService.issueCoupon(new CouponIssueRequest(1L, savedCoupon1.getId()));
+        couponService.issueCoupon(new CouponIssueRequest(1L, savedCoupon2.getId()));
 
         // when
         List<UserCouponResponse> userCoupons = couponService.getUserCoupons(1L);
@@ -91,11 +96,11 @@ class CouponIntegrationTest {
         // given
         LocalDateTime now = LocalDateTime.now();
         Coupon coupon = new Coupon("쿠폰", DiscountType.PERCENTAGE, 10, 100, now.minusDays(1), now.plusDays(30), 30);
-        couponRepository.save(coupon);
+        Coupon savedCoupon = couponRepository.save(coupon);
 
         // 사용자 1, 2에게 각각 쿠폰 발급
-        couponService.issueCoupon(new CouponIssueRequest(1L, coupon.getId()));
-        couponService.issueCoupon(new CouponIssueRequest(2L, coupon.getId()));
+        couponService.issueCoupon(new CouponIssueRequest(1L, savedCoupon.getId()));
+        couponService.issueCoupon(new CouponIssueRequest(2L, savedCoupon.getId()));
 
         // when
         List<UserCouponResponse> user1Coupons = couponService.getUserCoupons(1L);
@@ -125,16 +130,17 @@ class CouponIntegrationTest {
         // given
         LocalDateTime now = LocalDateTime.now();
         Coupon coupon = new Coupon("쿠폰", DiscountType.PERCENTAGE, 10, 10, now.minusDays(1), now.plusDays(30), 30);
-        couponRepository.save(coupon);
+        Coupon savedCoupon = couponRepository.save(coupon);
 
         // when
-        couponService.issueCoupon(new CouponIssueRequest(1L, coupon.getId()));
-        couponService.issueCoupon(new CouponIssueRequest(2L, coupon.getId()));
-        couponService.issueCoupon(new CouponIssueRequest(3L, coupon.getId()));
+        couponService.issueCoupon(new CouponIssueRequest(1L, savedCoupon.getId()));
+        couponService.issueCoupon(new CouponIssueRequest(2L, savedCoupon.getId()));
+        couponService.issueCoupon(new CouponIssueRequest(3L, savedCoupon.getId()));
 
         // then
-        assertThat(coupon.getCurrentIssueCount()).isEqualTo(3);
-        assertThat(coupon.getRemainingQuantity()).isEqualTo(7);
+        Coupon updatedCoupon = couponRepository.findById(savedCoupon.getId()).orElseThrow();
+        assertThat(updatedCoupon.getCurrentIssueCount()).isEqualTo(3);
+        assertThat(updatedCoupon.getRemainingQuantity()).isEqualTo(7);
     }
 
     @Test
@@ -143,17 +149,20 @@ class CouponIntegrationTest {
         // given
         LocalDateTime now = LocalDateTime.now();
         Coupon coupon = new Coupon("쿠폰", DiscountType.PERCENTAGE, 10, 1, now.minusDays(1), now.plusDays(30), 30);
-        couponRepository.save(coupon);
+        Coupon savedCoupon = couponRepository.save(coupon);
 
         // 먼저 1개 발급하여 수량 소진
-        couponService.issueCoupon(new CouponIssueRequest(1L, coupon.getId()));
+        couponService.issueCoupon(new CouponIssueRequest(1L, savedCoupon.getId()));
 
         // 두 번째 시도
-        CouponIssueRequest request = new CouponIssueRequest(2L, coupon.getId());
+        CouponIssueRequest request = new CouponIssueRequest(2L, savedCoupon.getId());
 
         // when & then
         assertThatThrownBy(() -> couponService.issueCoupon(request))
-                .isInstanceOf(IllegalStateException.class)
+                .satisfiesAnyOf(
+                        ex -> assertThat(ex).isInstanceOf(IllegalStateException.class),
+                        ex -> assertThat(ex).isInstanceOf(org.springframework.dao.InvalidDataAccessApiUsageException.class)
+                )
                 .hasMessageContaining("발급 가능한 수량이 없습니다");
     }
 
@@ -165,7 +174,10 @@ class CouponIntegrationTest {
 
         // when & then
         assertThatThrownBy(() -> couponService.issueCoupon(request))
-                .isInstanceOf(IllegalArgumentException.class)
+                .satisfiesAnyOf(
+                        ex -> assertThat(ex).isInstanceOf(IllegalArgumentException.class),
+                        ex -> assertThat(ex).isInstanceOf(org.springframework.dao.InvalidDataAccessApiUsageException.class)
+                )
                 .hasMessageContaining("쿠폰을 찾을 수 없습니다");
     }
 
@@ -183,9 +195,9 @@ class CouponIntegrationTest {
                 now.plusDays(60),
                 30  // 발급 후 30일간 유효
         );
-        couponRepository.save(coupon);
+        Coupon savedCoupon = couponRepository.save(coupon);
 
-        CouponIssueRequest request = new CouponIssueRequest(1L, coupon.getId());
+        CouponIssueRequest request = new CouponIssueRequest(1L, savedCoupon.getId());
 
         // when
         UserCouponResponse response = couponService.issueCoupon(request);
@@ -202,18 +214,19 @@ class CouponIntegrationTest {
         // given
         LocalDateTime now = LocalDateTime.now();
         Coupon coupon = new Coupon("쿠폰", DiscountType.PERCENTAGE, 10, 5, now.minusDays(1), now.plusDays(30), 30);
-        couponRepository.save(coupon);
+        Coupon savedCoupon = couponRepository.save(coupon);
 
         // when
-        UserCouponResponse response1 = couponService.issueCoupon(new CouponIssueRequest(1L, coupon.getId()));
-        UserCouponResponse response2 = couponService.issueCoupon(new CouponIssueRequest(2L, coupon.getId()));
-        UserCouponResponse response3 = couponService.issueCoupon(new CouponIssueRequest(3L, coupon.getId()));
+        UserCouponResponse response1 = couponService.issueCoupon(new CouponIssueRequest(1L, savedCoupon.getId()));
+        UserCouponResponse response2 = couponService.issueCoupon(new CouponIssueRequest(2L, savedCoupon.getId()));
+        UserCouponResponse response3 = couponService.issueCoupon(new CouponIssueRequest(3L, savedCoupon.getId()));
 
         // then
         assertThat(response1.userId()).isEqualTo(1L);
         assertThat(response2.userId()).isEqualTo(2L);
         assertThat(response3.userId()).isEqualTo(3L);
-        assertThat(coupon.getCurrentIssueCount()).isEqualTo(3);
-        assertThat(coupon.getRemainingQuantity()).isEqualTo(2);
+        Coupon updatedCoupon = couponRepository.findById(savedCoupon.getId()).orElseThrow();
+        assertThat(updatedCoupon.getCurrentIssueCount()).isEqualTo(3);
+        assertThat(updatedCoupon.getRemainingQuantity()).isEqualTo(2);
     }
 }
