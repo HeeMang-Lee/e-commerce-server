@@ -23,7 +23,9 @@ public class InMemoryPopularProductRepository implements PopularProductRepositor
 
     private final List<SaleRecord> saleRecords = Collections.synchronizedList(new ArrayList<>());
 
-    @Override
+    /**
+     * 테스트용: 판매 기록 추가 (View가 없는 테스트 환경에서 사용)
+     */
     public void recordSale(Long productId, Integer quantity, LocalDateTime orderTime) {
         saleRecords.add(new SaleRecord(productId, quantity, orderTime));
     }

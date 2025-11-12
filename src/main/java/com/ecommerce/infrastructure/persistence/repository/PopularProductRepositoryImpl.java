@@ -1,10 +1,9 @@
 package com.ecommerce.infrastructure.persistence.repository;
 
-import com.ecommerce.domain.entity.PopularProduct;
 import com.ecommerce.domain.repository.PopularProductRepository;
+import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -13,25 +12,21 @@ import java.util.List;
 @RequiredArgsConstructor
 public class PopularProductRepositoryImpl implements PopularProductRepository {
 
-    private final JpaPopularProductRepository jpaPopularProductRepository;
-
-    @Override
-    @Transactional
-    public void recordSale(Long productId, Integer quantity, LocalDateTime orderTime) {
-        PopularProduct popularProduct = jpaPopularProductRepository.findByProductId(productId)
-                .orElseGet(() -> new PopularProduct(productId));
-
-        popularProduct.incrementSales(quantity);
-        jpaPopularProductRepository.save(popularProduct);
-    }
+    private final EntityManager entityManager;
 
     @Override
     public List<Long> getTopProductIds(LocalDateTime startTime, LocalDateTime endTime, int limit) {
-        List<Long> productIds = jpaPopularProductRepository
-                .findTopProductIdsByTimeRange(startTime, endTime);
+        String sql = """
+            SELECT product_id
+            FROM popular_products_view
+            WHERE last_updated >= :startTime
+            ORDER BY sales_count DESC
+            LIMIT :limit
+            """;
 
-        return productIds.stream()
-                .limit(limit)
-                .toList();
+        return entityManager.createNativeQuery(sql, Long.class)
+                .setParameter("startTime", startTime)
+                .setParameter("limit", limit)
+                .getResultList();
     }
 }

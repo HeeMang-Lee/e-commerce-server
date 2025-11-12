@@ -26,7 +26,6 @@ public class OrderService {
     private final OrderPaymentRepository orderPaymentRepository;
     private final UserCouponRepository userCouponRepository;
     private final PointHistoryRepository pointHistoryRepository;
-    private final PopularProductRepository popularProductRepository;
     private final OutboxEventRepository outboxEventRepository;
     private final DataPlatformService dataPlatformService;
 
@@ -131,15 +130,6 @@ public class OrderService {
 
             payment.complete();
             orderPaymentRepository.save(payment);
-
-            LocalDateTime now = LocalDateTime.now();
-            for (OrderItem item : order.getItems()) {
-                popularProductRepository.recordSale(
-                        item.getProductId(),
-                        item.getQuantity(),
-                        now
-                );
-            }
 
             String orderData = "{\"orderId\":" + order.getId() +
                     ",\"orderNumber\":\"" + order.getOrderNumber() +
