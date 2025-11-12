@@ -17,15 +17,20 @@ public class PopularProductRepositoryImpl implements PopularProductRepository {
 
     @Override
     public List<Long> getTopProductIds(LocalDateTime startTime, LocalDateTime endTime, int limit) {
-        // View already filters for last 3 days, so we just query it directly
+        // View 대신 직접 JOIN 쿼리 사용 (Testcontainers 환경 호환)
         String sql = """
-            SELECT product_id
-            FROM popular_products_view
-            ORDER BY sales_count DESC
+            SELECT oi.product_id
+            FROM order_items oi
+            INNER JOIN orders o ON oi.order_id = o.id
+            WHERE o.created_at >= :startTime AND o.created_at < :endTime
+            GROUP BY oi.product_id
+            ORDER BY SUM(oi.quantity) DESC
             LIMIT :limit
             """;
 
         return entityManager.createNativeQuery(sql, Long.class)
+                .setParameter("startTime", startTime)
+                .setParameter("endTime", endTime)
                 .setParameter("limit", limit)
                 .getResultList();
     }
