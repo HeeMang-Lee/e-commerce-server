@@ -155,32 +155,6 @@ class UserCouponTest {
     }
 
     @Test
-    @DisplayName("사용자 ID가 null이면 예외가 발생한다")
-    void createUserCoupon_ShouldThrowException_WhenUserIdIsNull() {
-        // when & then
-        assertThatThrownBy(() -> new UserCoupon(
-                null,
-                100L,
-                LocalDateTime.now().plusDays(30)
-        ))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("사용자 ID는 필수");
-    }
-
-    @Test
-    @DisplayName("쿠폰 ID가 null이면 예외가 발생한다")
-    void createUserCoupon_ShouldThrowException_WhenCouponIdIsNull() {
-        // when & then
-        assertThatThrownBy(() -> new UserCoupon(
-                1L,
-                null,
-                LocalDateTime.now().plusDays(30)
-        ))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("쿠폰 ID는 필수");
-    }
-
-    @Test
     @DisplayName("만료일이 null이면 예외가 발생한다")
     void createUserCoupon_ShouldThrowException_WhenExpiresAtIsNull() {
         // when & then

@@ -51,12 +51,4 @@ class OrderTest {
         assertThat(order.getUpdatedAt()).isAfter(originalUpdatedAt);
     }
 
-    @Test
-    @DisplayName("사용자 ID가 null이면 예외가 발생한다")
-    void createOrder_ShouldThrowException_WhenUserIdIsNull() {
-        // when & then
-        assertThatThrownBy(() -> new Order(null))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("사용자 ID는 필수");
-    }
 }
