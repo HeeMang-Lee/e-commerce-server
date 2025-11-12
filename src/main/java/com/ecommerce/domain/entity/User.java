@@ -31,7 +31,9 @@ public class User extends BaseTimeEntity {
 
     public User(Long id, String name, String email, Integer pointBalance) {
         validateConstructorParams(id, name, pointBalance);
-        setId(id);
+        if (id != null) {
+            setId(id);
+        }
         this.name = name;
         this.email = Email.of(email);
         this.pointBalance = Money.of(pointBalance);
@@ -39,8 +41,8 @@ public class User extends BaseTimeEntity {
     }
 
     private void validateConstructorParams(Long id, String name, Integer pointBalance) {
-        if (id == null) {
-            throw new IllegalArgumentException("사용자 ID는 필수입니다");
+        if (id != null && id <= 0) {
+            throw new IllegalArgumentException("사용자 ID는 양수여야 합니다");
         }
         if (name == null || name.isBlank()) {
             throw new IllegalArgumentException("사용자 이름은 필수입니다");

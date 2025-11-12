@@ -41,7 +41,9 @@ public class Product extends BaseTimeEntity {
     public Product(Long id, String name, String description, Integer basePrice,
                    Integer stockQuantity, String category) {
         validateConstructorParams(id, name, basePrice, stockQuantity, category);
-        setId(id);
+        if (id != null) {
+            setId(id);
+        }
         this.name = name;
         this.description = description;
         this.basePrice = Money.of(basePrice);
@@ -53,7 +55,7 @@ public class Product extends BaseTimeEntity {
 
     private void validateConstructorParams(Long id, String name, Integer basePrice,
                                             Integer stockQuantity, String category) {
-        if (id == null || id <= 0) {
+        if (id != null && id <= 0) {
             throw new IllegalArgumentException("상품 ID는 양수여야 합니다");
         }
         if (name == null || name.isBlank()) {
