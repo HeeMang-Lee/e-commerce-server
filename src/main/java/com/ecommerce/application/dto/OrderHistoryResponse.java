@@ -21,8 +21,8 @@ public record OrderHistoryResponse(
         String status
     ) {}
 
-    public static OrderHistoryResponse from(Order order) {
-        List<OrderItemInfo> items = order.getItems().stream()
+    public static OrderHistoryResponse from(Order order, List<com.ecommerce.domain.entity.OrderItem> orderItems) {
+        List<OrderItemInfo> items = orderItems.stream()
                 .map(item -> new OrderItemInfo(
                         item.getProductId(),
                         item.getSnapshotProductName(),
@@ -32,10 +32,14 @@ public record OrderHistoryResponse(
                 ))
                 .toList();
 
+        int totalAmount = orderItems.stream()
+                .mapToInt(com.ecommerce.domain.entity.OrderItem::getItemTotalAmount)
+                .sum();
+
         return new OrderHistoryResponse(
                 order.getId(),
                 order.getOrderNumber(),
-                order.calculateTotalAmount(),
+                totalAmount,
                 order.getCreatedAt(),
                 items
         );

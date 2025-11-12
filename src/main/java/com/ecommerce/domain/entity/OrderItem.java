@@ -63,6 +63,8 @@ public class OrderItem {
         this.snapshotPrice = Money.of(product.getBasePrice());
         this.itemTotalAmount = this.snapshotPrice.multiply(quantity);
         this.status = OrderItemStatus.PENDING;
+        this.createdAt = LocalDateTime.now();
+        this.updatedAt = LocalDateTime.now();
     }
 
     private void validateConstructorParams(Product product, int quantity) {
@@ -91,6 +93,7 @@ public class OrderItem {
             throw new IllegalArgumentException("주문 ID는 필수입니다");
         }
         this.orderId = orderId;
+        this.updatedAt = LocalDateTime.now();
     }
 
     public void updateStatus(OrderItemStatus status) {
@@ -98,6 +101,7 @@ public class OrderItem {
             throw new IllegalArgumentException("상태는 필수입니다");
         }
         this.status = status;
+        this.updatedAt = LocalDateTime.now();
     }
 
     public void confirm() {

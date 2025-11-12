@@ -32,10 +32,10 @@ class ProductStockConcurrencyIntegrationTest {
     private UserRepository userRepository;
     private ProductRepository productRepository;
     private OrderRepository orderRepository;
+    private OrderItemRepository orderItemRepository;
     private OrderPaymentRepository orderPaymentRepository;
     private UserCouponRepository userCouponRepository;
     private PointHistoryRepository pointHistoryRepository;
-    private PopularProductRepository popularProductRepository;
     private OutboxEventRepository outboxEventRepository;
     private DataPlatformService dataPlatformService;
     private OrderService orderService;
@@ -45,10 +45,10 @@ class ProductStockConcurrencyIntegrationTest {
         userRepository = new InMemoryUserRepository();
         productRepository = new InMemoryProductRepository();
         orderRepository = new InMemoryOrderRepository();
+        orderItemRepository = new InMemoryOrderItemRepository();
         orderPaymentRepository = new InMemoryOrderPaymentRepository();
         userCouponRepository = new InMemoryUserCouponRepository();
         pointHistoryRepository = new InMemoryPointHistoryRepository();
-        popularProductRepository = new InMemoryPopularProductRepository();
         outboxEventRepository = new InMemoryOutboxEventRepository();
         dataPlatformService = mock(DataPlatformService.class);
 
@@ -56,10 +56,10 @@ class ProductStockConcurrencyIntegrationTest {
                 userRepository,
                 productRepository,
                 orderRepository,
+                orderItemRepository,
                 orderPaymentRepository,
                 userCouponRepository,
                 pointHistoryRepository,
-                popularProductRepository,
                 outboxEventRepository,
                 dataPlatformService
         );

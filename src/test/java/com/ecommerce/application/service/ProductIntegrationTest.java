@@ -4,7 +4,6 @@ import com.ecommerce.application.dto.ProductResponse;
 import com.ecommerce.domain.entity.Order;
 import com.ecommerce.domain.entity.OrderItem;
 import com.ecommerce.domain.entity.Product;
-import com.ecommerce.domain.repository.PopularProductRepository;
 import com.ecommerce.domain.repository.ProductRepository;
 import com.ecommerce.infrastructure.repository.InMemoryPopularProductRepository;
 import com.ecommerce.infrastructure.repository.InMemoryProductRepository;
@@ -26,7 +25,7 @@ import static org.assertj.core.api.Assertions.*;
 class ProductIntegrationTest {
 
     private ProductRepository productRepository;
-    private PopularProductRepository popularProductRepository;
+    private InMemoryPopularProductRepository popularProductRepository;
     private ProductService productService;
 
     @BeforeEach
