@@ -1,11 +1,10 @@
 package com.ecommerce.domain.entity;
 
+import com.ecommerce.domain.entity.base.BaseTimeEntity;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import org.hibernate.annotations.CreationTimestamp;
-import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -20,25 +19,13 @@ import java.time.format.DateTimeFormatter;
 @Table(name = "orders")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-public class Order {
-
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+public class Order extends BaseTimeEntity {
 
     @Column(name = "user_id", nullable = false)
     private Long userId;
 
     @Column(name = "order_number", nullable = false, unique = true, length = 50)
     private String orderNumber;
-
-    @CreationTimestamp
-    @Column(name = "created_at", nullable = false, updatable = false)
-    private LocalDateTime createdAt;
-
-    @UpdateTimestamp
-    @Column(name = "updated_at", nullable = false)
-    private LocalDateTime updatedAt;
 
     public Order(Long userId) {
         if (userId == null) {
@@ -47,8 +34,7 @@ public class Order {
 
         this.userId = userId;
         this.orderNumber = generateOrderNumber();
-        this.createdAt = LocalDateTime.now();
-        this.updatedAt = LocalDateTime.now();
+        initializeTimestamps();
     }
 
     /**
@@ -63,13 +49,5 @@ public class Order {
         int nanosValue = now.getNano() % 1000000;
         String nanos = ("000000" + nanosValue).substring(String.valueOf(nanosValue).length());
         return "ORD-" + timestamp + "-" + nanos;
-    }
-
-    public void setId(Long id) {
-        this.id = id;
-    }
-
-    public void updateTimestamp() {
-        this.updatedAt = LocalDateTime.now();
     }
 }

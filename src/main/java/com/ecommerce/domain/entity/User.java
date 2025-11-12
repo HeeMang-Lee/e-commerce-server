@@ -1,13 +1,12 @@
 package com.ecommerce.domain.entity;
 
+import com.ecommerce.domain.entity.base.BaseTimeEntity;
 import com.ecommerce.domain.vo.Email;
 import com.ecommerce.domain.vo.Money;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import org.hibernate.annotations.CreationTimestamp;
-import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.LocalDateTime;
 
@@ -19,11 +18,7 @@ import java.time.LocalDateTime;
 @Table(name = "users")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-public class User {
-
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+public class User extends BaseTimeEntity {
 
     @Column(name = "name", nullable = false, length = 100)
     private String name;
@@ -34,22 +29,13 @@ public class User {
     @Column(name = "point_balance", nullable = false, precision = 15, scale = 2)
     private Money pointBalance;
 
-    @CreationTimestamp
-    @Column(name = "created_at", nullable = false, updatable = false)
-    private LocalDateTime createdAt;
-
-    @UpdateTimestamp
-    @Column(name = "updated_at", nullable = false)
-    private LocalDateTime updatedAt;
-
     public User(Long id, String name, String email, Integer pointBalance) {
         validateConstructorParams(id, name, pointBalance);
-        this.id = id;
+        setId(id);
         this.name = name;
         this.email = Email.of(email);
         this.pointBalance = Money.of(pointBalance);
-        this.createdAt = LocalDateTime.now();
-        this.updatedAt = LocalDateTime.now();
+        initializeTimestamps();
     }
 
     private void validateConstructorParams(Long id, String name, Integer pointBalance) {
@@ -99,7 +85,7 @@ public class User {
         }
         Money deductAmount = Money.of(amount);
         this.pointBalance = this.pointBalance.subtract(deductAmount);
-        this.updatedAt = LocalDateTime.now();
+        updateTimestamp();
     }
 
     /**
@@ -114,15 +100,6 @@ public class User {
         }
         Money chargeAmount = Money.of(amount);
         this.pointBalance = this.pointBalance.add(chargeAmount);
-        this.updatedAt = LocalDateTime.now();
-    }
-
-    /**
-     * ID를 설정합니다. (Repository에서 저장 후 호출)
-     *
-     * @param id 사용자 ID
-     */
-    public void setId(Long id) {
-        this.id = id;
+        updateTimestamp();
     }
 }

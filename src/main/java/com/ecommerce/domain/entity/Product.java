@@ -1,12 +1,11 @@
 package com.ecommerce.domain.entity;
 
+import com.ecommerce.domain.entity.base.BaseTimeEntity;
 import com.ecommerce.domain.vo.Money;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import org.hibernate.annotations.CreationTimestamp;
-import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.LocalDateTime;
 
@@ -18,11 +17,7 @@ import java.time.LocalDateTime;
 @Table(name = "products")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-public class Product {
-
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+public class Product extends BaseTimeEntity {
 
     @Column(name = "name", nullable = false, length = 200)
     private String name;
@@ -43,26 +38,17 @@ public class Product {
     @Column(name = "category", length = 50)
     private String category;
 
-    @CreationTimestamp
-    @Column(name = "created_at", nullable = false, updatable = false)
-    private LocalDateTime createdAt;
-
-    @UpdateTimestamp
-    @Column(name = "updated_at", nullable = false)
-    private LocalDateTime updatedAt;
-
     public Product(Long id, String name, String description, Integer basePrice,
                    Integer stockQuantity, String category) {
         validateConstructorParams(id, name, basePrice, stockQuantity, category);
-        this.id = id;
+        setId(id);
         this.name = name;
         this.description = description;
         this.basePrice = Money.of(basePrice);
         this.stockQuantity = stockQuantity;
         this.status = ProductStatus.ACTIVE;
         this.category = category;
-        this.createdAt = LocalDateTime.now();
-        this.updatedAt = LocalDateTime.now();
+        initializeTimestamps();
     }
 
     private void validateConstructorParams(Long id, String name, Integer basePrice,
@@ -118,7 +104,7 @@ public class Product {
             );
         }
         this.stockQuantity -= quantity;
-        this.updatedAt = LocalDateTime.now();
+        updateTimestamp();
     }
 
     /**
@@ -132,7 +118,7 @@ public class Product {
             throw new IllegalArgumentException("수량은 0보다 커야 합니다");
         }
         this.stockQuantity += quantity;
-        this.updatedAt = LocalDateTime.now();
+        updateTimestamp();
     }
 
     /**
@@ -159,15 +145,6 @@ public class Product {
             throw new IllegalArgumentException("상태는 필수입니다");
         }
         this.status = status;
-        this.updatedAt = LocalDateTime.now();
-    }
-
-    /**
-     * ID를 설정합니다. (Repository에서 저장 후 호출)
-     *
-     * @param id 상품 ID
-     */
-    public void setId(Long id) {
-        this.id = id;
+        updateTimestamp();
     }
 }

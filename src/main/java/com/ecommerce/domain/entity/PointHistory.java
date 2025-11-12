@@ -1,5 +1,6 @@
 package com.ecommerce.domain.entity;
 
+import com.ecommerce.domain.entity.base.BaseEntity;
 import com.ecommerce.domain.vo.Money;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
@@ -17,11 +18,7 @@ import java.time.LocalDateTime;
 @Table(name = "point_histories")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-public class PointHistory {
-
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+public class PointHistory extends BaseEntity {
 
     @Column(name = "user_id", nullable = false)
     private Long userId;
@@ -90,9 +87,5 @@ public class PointHistory {
 
     public int getBalanceAfter() {
         return balanceAfter.getAmount();
-    }
-
-    public void setId(Long id) {
-        this.id = id;
     }
 }

@@ -1,5 +1,6 @@
 package com.ecommerce.domain.entity;
 
+import com.ecommerce.domain.entity.base.BaseEntity;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -16,11 +17,7 @@ import java.time.LocalDateTime;
 @Table(name = "outbox_events")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-public class OutboxEvent {
-
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+public class OutboxEvent extends BaseEntity {
 
     @Column(name = "event_type", nullable = false, length = 100)
     private String eventType;
@@ -55,10 +52,6 @@ public class OutboxEvent {
         this.status = OutboxStatus.PENDING;
         this.retryCount = 0;
         this.createdAt = LocalDateTime.now();
-    }
-
-    public void setId(Long id) {
-        this.id = id;
     }
 
     public void markAsProcessed() {

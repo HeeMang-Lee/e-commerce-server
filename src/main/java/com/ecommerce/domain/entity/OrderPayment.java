@@ -1,5 +1,6 @@
 package com.ecommerce.domain.entity;
 
+import com.ecommerce.domain.entity.base.BaseEntity;
 import com.ecommerce.domain.vo.Money;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
@@ -17,11 +18,7 @@ import java.time.LocalDateTime;
 @Table(name = "order_payments")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-public class OrderPayment {
-
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+public class OrderPayment extends BaseEntity {
 
     @Column(name = "order_id", nullable = false)
     private Long orderId;
@@ -127,10 +124,6 @@ public class OrderPayment {
 
     public void fail() {
         this.paymentStatus = PaymentStatus.FAILED;
-    }
-
-    public void setId(Long id) {
-        this.id = id;
     }
 
     public void setPaymentData(String paymentData) {

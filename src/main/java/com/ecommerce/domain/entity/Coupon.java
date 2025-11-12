@@ -1,11 +1,10 @@
 package com.ecommerce.domain.entity;
 
+import com.ecommerce.domain.entity.base.BaseTimeEntity;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import org.hibernate.annotations.CreationTimestamp;
-import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.LocalDateTime;
 
@@ -17,11 +16,7 @@ import java.time.LocalDateTime;
 @Table(name = "coupons")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-public class Coupon {
-
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+public class Coupon extends BaseTimeEntity {
 
     @Column(name = "name", nullable = false, length = 100)
     private String name;
@@ -52,14 +47,6 @@ public class Coupon {
     @Column(name = "status", nullable = false, length = 20)
     private CouponStatus status;
 
-    @CreationTimestamp
-    @Column(name = "created_at", nullable = false, updatable = false)
-    private LocalDateTime createdAt;
-
-    @UpdateTimestamp
-    @Column(name = "updated_at", nullable = false)
-    private LocalDateTime updatedAt;
-
     public Coupon(String name, DiscountType discountType, Integer discountValue,
                   Integer maxIssueCount, LocalDateTime issueStartDate,
                   LocalDateTime issueEndDate, Integer validPeriodDays) {
@@ -75,8 +62,7 @@ public class Coupon {
         this.issueEndDate = issueEndDate;
         this.validPeriodDays = validPeriodDays;
         this.status = CouponStatus.ACTIVE;
-        this.createdAt = LocalDateTime.now();
-        this.updatedAt = LocalDateTime.now();
+        initializeTimestamps();
     }
 
     private void validateConstructorParams(String name, DiscountType discountType,
@@ -112,10 +98,6 @@ public class Coupon {
         }
     }
 
-    public void setId(Long id) {
-        this.id = id;
-    }
-
     public boolean canIssue() {
         if (status != CouponStatus.ACTIVE) {
             return false;
@@ -142,7 +124,7 @@ public class Coupon {
             throw new IllegalStateException("발급 가능한 수량이 없습니다");
         }
         this.currentIssueCount++;
-        this.updatedAt = LocalDateTime.now();
+        updateTimestamp();
     }
 
     public int getRemainingQuantity() {
@@ -154,7 +136,7 @@ public class Coupon {
             throw new IllegalArgumentException("상태는 필수입니다");
         }
         this.status = status;
-        this.updatedAt = LocalDateTime.now();
+        updateTimestamp();
     }
 
     public void activate() {

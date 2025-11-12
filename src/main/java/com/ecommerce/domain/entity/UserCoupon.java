@@ -1,5 +1,6 @@
 package com.ecommerce.domain.entity;
 
+import com.ecommerce.domain.entity.base.BaseEntity;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -16,11 +17,7 @@ import java.time.LocalDateTime;
 @Table(name = "user_coupons")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-public class UserCoupon {
-
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+public class UserCoupon extends BaseEntity {
 
     @Column(name = "user_id", nullable = false)
     private Long userId;
@@ -82,9 +79,5 @@ public class UserCoupon {
 
     public boolean isExpired() {
         return LocalDateTime.now().isAfter(expiresAt);
-    }
-
-    public void setId(Long id) {
-        this.id = id;
     }
 }

@@ -1,12 +1,11 @@
 package com.ecommerce.domain.entity;
 
+import com.ecommerce.domain.entity.base.BaseTimeEntity;
 import com.ecommerce.domain.vo.Money;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import org.hibernate.annotations.CreationTimestamp;
-import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.LocalDateTime;
 
@@ -18,11 +17,7 @@ import java.time.LocalDateTime;
 @Table(name = "order_items")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-public class OrderItem {
-
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+public class OrderItem extends BaseTimeEntity {
 
     @Column(name = "order_id")
     private Long orderId;
@@ -46,14 +41,6 @@ public class OrderItem {
     @Column(name = "status", nullable = false, length = 20)
     private OrderItemStatus status;
 
-    @CreationTimestamp
-    @Column(name = "created_at", nullable = false, updatable = false)
-    private LocalDateTime createdAt;
-
-    @UpdateTimestamp
-    @Column(name = "updated_at", nullable = false)
-    private LocalDateTime updatedAt;
-
     public OrderItem(Product product, int quantity) {
         validateConstructorParams(product, quantity);
 
@@ -63,8 +50,7 @@ public class OrderItem {
         this.snapshotPrice = Money.of(product.getBasePrice());
         this.itemTotalAmount = this.snapshotPrice.multiply(quantity);
         this.status = OrderItemStatus.PENDING;
-        this.createdAt = LocalDateTime.now();
-        this.updatedAt = LocalDateTime.now();
+        initializeTimestamps();
     }
 
     private void validateConstructorParams(Product product, int quantity) {
@@ -84,16 +70,12 @@ public class OrderItem {
         return itemTotalAmount.getAmount();
     }
 
-    public void setId(Long id) {
-        this.id = id;
-    }
-
     public void setOrderId(Long orderId) {
         if (orderId == null) {
             throw new IllegalArgumentException("주문 ID는 필수입니다");
         }
         this.orderId = orderId;
-        this.updatedAt = LocalDateTime.now();
+        updateTimestamp();
     }
 
     public void updateStatus(OrderItemStatus status) {
@@ -101,7 +83,7 @@ public class OrderItem {
             throw new IllegalArgumentException("상태는 필수입니다");
         }
         this.status = status;
-        this.updatedAt = LocalDateTime.now();
+        updateTimestamp();
     }
 
     public void confirm() {
