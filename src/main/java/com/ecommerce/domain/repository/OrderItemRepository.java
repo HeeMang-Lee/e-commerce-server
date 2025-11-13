@@ -12,5 +12,10 @@ public interface OrderItemRepository {
 
     List<OrderItem> findByOrderId(Long orderId);
 
+    /**
+     * 여러 주문의 주문 아이템을 한 번에 조회합니다 (N+1 문제 해결)
+     */
+    List<OrderItem> findByOrderIdIn(List<Long> orderIds);
+
     void deleteAll();
 }
