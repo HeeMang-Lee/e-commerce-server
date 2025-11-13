@@ -33,13 +33,13 @@ class OrderServiceTest {
     @Mock
     private OrderRepository orderRepository;
     @Mock
+    private OrderItemRepository orderItemRepository;
+    @Mock
     private OrderPaymentRepository orderPaymentRepository;
     @Mock
     private UserCouponRepository userCouponRepository;
     @Mock
     private PointHistoryRepository pointHistoryRepository;
-    @Mock
-    private PopularProductRepository popularProductRepository;
     @Mock
     private OutboxEventRepository outboxEventRepository;
     @Mock
@@ -71,6 +71,7 @@ class OrderServiceTest {
             o.setId(1L);
             return o;
         });
+        when(orderItemRepository.saveAll(any())).thenAnswer(inv -> inv.getArgument(0));
         when(orderPaymentRepository.save(any(OrderPayment.class))).thenAnswer(inv -> inv.getArgument(0));
 
         // when
@@ -88,7 +89,6 @@ class OrderServiceTest {
         verify(pointHistoryRepository, never()).save(any());
         verify(userCouponRepository, never()).save(any());
         verify(dataPlatformService, never()).sendOrderData(anyString());
-        verify(popularProductRepository, never()).recordSale(any(), anyInt(), any());
     }
 
     @Test
@@ -99,12 +99,15 @@ class OrderServiceTest {
         Product product = new Product(1L, "키보드", "무선", 50000, 10, "전자");
 
         List<OrderItem> items = new ArrayList<>();
-        items.add(new OrderItem(product, 2));
+        OrderItem orderItem = new OrderItem(product, 2);
+        orderItem.setOrderId(1L);
+        items.add(orderItem);
 
-        Order order = new Order(user.getId(), items);
+        Order order = new Order(user.getId());
         order.setId(1L);
 
         when(orderRepository.findByUserId(1L)).thenReturn(Arrays.asList(order));
+        when(orderItemRepository.findByOrderId(1L)).thenReturn(items);
 
         // when
         List<OrderHistoryResponse> history = orderService.getOrderHistory(1L);
@@ -125,9 +128,11 @@ class OrderServiceTest {
         Product product = new Product(1L, "키보드", "무선", 50000, 8, "전자");
 
         List<OrderItem> items = new ArrayList<>();
-        items.add(new OrderItem(product, 2));
+        OrderItem orderItem = new OrderItem(product, 2);
+        orderItem.setOrderId(1L);
+        items.add(orderItem);
 
-        Order order = new Order(user.getId(), items);
+        Order order = new Order(user.getId());
         order.setId(1L);
 
         OrderPayment payment = new OrderPayment(1L, 100000, 0, 5000, null);
@@ -152,7 +157,6 @@ class OrderServiceTest {
         assertThat(user.getPointBalance()).isEqualTo(5000); // 10000 - 5000
 
         verify(pointHistoryRepository, times(1)).save(any());
-        verify(popularProductRepository, times(1)).recordSale(eq(1L), eq(2), any());
         verify(dataPlatformService, times(1)).sendOrderData(anyString());
     }
 }

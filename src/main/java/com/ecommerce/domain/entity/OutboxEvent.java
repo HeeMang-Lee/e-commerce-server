@@ -1,6 +1,11 @@
 package com.ecommerce.domain.entity;
 
+import com.ecommerce.domain.entity.base.BaseEntity;
+import jakarta.persistence.*;
+import lombok.AccessLevel;
 import lombok.Getter;
+import lombok.NoArgsConstructor;
+import org.hibernate.annotations.CreationTimestamp;
 
 import java.time.LocalDateTime;
 
@@ -8,15 +13,30 @@ import java.time.LocalDateTime;
  * 아웃박스 이벤트 Entity
  * 외부 시스템으로 전송할 이벤트를 임시 저장합니다.
  */
+@Entity
+@Table(name = "outbox_events")
 @Getter
-public class OutboxEvent {
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
+public class OutboxEvent extends BaseEntity {
 
-    private Long id;
-    private final String eventType;
-    private final String payload;
+    @Column(name = "event_type", nullable = false, length = 100)
+    private String eventType;
+
+    @Column(name = "payload", nullable = false, columnDefinition = "TEXT")
+    private String payload;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", nullable = false, length = 20)
     private OutboxStatus status;
+
+    @Column(name = "retry_count", nullable = false)
     private Integer retryCount;
-    private final LocalDateTime createdAt;
+
+    @CreationTimestamp
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private LocalDateTime createdAt;
+
+    @Column(name = "processed_at")
     private LocalDateTime processedAt;
 
     public OutboxEvent(String eventType, String payload) {
@@ -34,29 +54,16 @@ public class OutboxEvent {
         this.createdAt = LocalDateTime.now();
     }
 
-    public void setId(Long id) {
-        this.id = id;
-    }
-
-    /**
-     * 이벤트 처리 완료 상태로 변경
-     */
     public void markAsProcessed() {
         this.status = OutboxStatus.PROCESSED;
         this.processedAt = LocalDateTime.now();
     }
 
-    /**
-     * 이벤트 처리 실패 상태로 변경
-     */
     public void markAsFailed() {
         this.status = OutboxStatus.FAILED;
         this.retryCount++;
     }
 
-    /**
-     * 재시도 가능 여부 확인
-     */
     public boolean canRetry(int maxRetryCount) {
         return this.retryCount < maxRetryCount && this.status != OutboxStatus.PROCESSED;
     }

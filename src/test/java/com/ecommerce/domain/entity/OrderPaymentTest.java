@@ -93,15 +93,6 @@ class OrderPaymentTest {
     }
 
     @Test
-    @DisplayName("주문 ID가 null이면 예외가 발생한다")
-    void createPayment_ShouldThrowException_WhenOrderIdIsNull() {
-        // when & then
-        assertThatThrownBy(() -> new OrderPayment(null, 100000, 0, 0))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("주문 ID는 필수");
-    }
-
-    @Test
     @DisplayName("원 금액이 음수면 예외가 발생한다")
     void createPayment_ShouldThrowException_WhenOriginalAmountIsNegative() {
         // when & then

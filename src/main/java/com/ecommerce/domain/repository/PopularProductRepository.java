@@ -5,12 +5,15 @@ import java.util.List;
 
 public interface PopularProductRepository {
     /**
-     * 상품 판매 이력 기록
-     */
-    void recordSale(Long productId, Integer quantity, LocalDateTime orderTime);
-
-    /**
      * 특정 기간 동안 판매량 기준 인기 상품 조회
+     * View에서 집계된 데이터를 조회합니다.
      */
     List<Long> getTopProductIds(LocalDateTime startTime, LocalDateTime endTime, int limit);
+
+    void deleteAll();
+
+    /**
+     * 판매 기록 저장 (테스트용)
+     */
+    void recordSale(Long productId, int quantity, LocalDateTime soldAt);
 }

@@ -116,15 +116,6 @@ class UserTest {
     }
 
     @Test
-    @DisplayName("사용자 ID가 null이면 예외가 발생한다")
-    void createUser_ShouldThrowException_WhenIdIsNull() {
-        // when & then
-        assertThatThrownBy(() -> new User(null, "홍길동", "hong@example.com", 50000))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("사용자 ID는 필수");
-    }
-
-    @Test
     @DisplayName("사용자 이름이 null이거나 빈 문자열이면 예외가 발생한다")
     void createUser_ShouldThrowException_WhenNameIsInvalid() {
         // when & then

@@ -1,7 +1,11 @@
 package com.ecommerce.domain.entity;
 
+import com.ecommerce.domain.entity.base.BaseTimeEntity;
 import com.ecommerce.domain.vo.Money;
+import jakarta.persistence.*;
+import lombok.AccessLevel;
 import lombok.Getter;
+import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
 
@@ -9,36 +13,49 @@ import java.time.LocalDateTime;
  * 상품 도메인 Entity
  * 재고 관리 및 가격 계산 비즈니스 로직을 포함합니다.
  */
+@Entity
+@Table(name = "products")
 @Getter
-public class Product {
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
+public class Product extends BaseTimeEntity {
 
-    private Long id;
-    private final String name;
-    private final String description;
-    private final Money basePrice;
+    @Column(name = "name", nullable = false, length = 200)
+    private String name;
+
+    @Column(name = "description", columnDefinition = "TEXT")
+    private String description;
+
+    @Column(name = "base_price", nullable = false, precision = 10, scale = 2)
+    private Money basePrice;
+
+    @Column(name = "stock_quantity", nullable = false)
     private Integer stockQuantity;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", nullable = false, length = 20)
     private ProductStatus status;
-    private final String category;
-    private final LocalDateTime createdAt;
-    private LocalDateTime updatedAt;
+
+    @Column(name = "category", length = 50)
+    private String category;
 
     public Product(Long id, String name, String description, Integer basePrice,
                    Integer stockQuantity, String category) {
         validateConstructorParams(id, name, basePrice, stockQuantity, category);
-        this.id = id;
+        if (id != null) {
+            setId(id);
+        }
         this.name = name;
         this.description = description;
         this.basePrice = Money.of(basePrice);
         this.stockQuantity = stockQuantity;
         this.status = ProductStatus.ACTIVE;
         this.category = category;
-        this.createdAt = LocalDateTime.now();
-        this.updatedAt = LocalDateTime.now();
+        initializeTimestamps();
     }
 
     private void validateConstructorParams(Long id, String name, Integer basePrice,
                                             Integer stockQuantity, String category) {
-        if (id == null || id <= 0) {
+        if (id != null && id <= 0) {
             throw new IllegalArgumentException("상품 ID는 양수여야 합니다");
         }
         if (name == null || name.isBlank()) {
@@ -89,7 +106,7 @@ public class Product {
             );
         }
         this.stockQuantity -= quantity;
-        this.updatedAt = LocalDateTime.now();
+        updateTimestamp();
     }
 
     /**
@@ -103,7 +120,7 @@ public class Product {
             throw new IllegalArgumentException("수량은 0보다 커야 합니다");
         }
         this.stockQuantity += quantity;
-        this.updatedAt = LocalDateTime.now();
+        updateTimestamp();
     }
 
     /**
@@ -130,15 +147,6 @@ public class Product {
             throw new IllegalArgumentException("상태는 필수입니다");
         }
         this.status = status;
-        this.updatedAt = LocalDateTime.now();
-    }
-
-    /**
-     * ID를 설정합니다. (Repository에서 저장 후 호출)
-     *
-     * @param id 상품 ID
-     */
-    public void setId(Long id) {
-        this.id = id;
+        updateTimestamp();
     }
 }

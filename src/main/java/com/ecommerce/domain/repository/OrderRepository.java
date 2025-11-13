@@ -17,4 +17,6 @@ public interface OrderRepository {
     }
 
     List<Order> findByUserId(Long userId);
+
+    void deleteAll();
 }

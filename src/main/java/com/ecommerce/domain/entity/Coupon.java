@@ -1,41 +1,52 @@
 package com.ecommerce.domain.entity;
 
+import com.ecommerce.domain.entity.base.BaseTimeEntity;
+import jakarta.persistence.*;
+import lombok.AccessLevel;
 import lombok.Getter;
+import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
 
 /**
  * 쿠폰 정책 Entity
  * 쿠폰 발급 및 수량 관리 비즈니스 로직을 포함합니다.
- * ERD 설계에 따라 발급 기간, 유효 기간 등을 관리합니다.
  */
+@Entity
+@Table(name = "coupons")
 @Getter
-public class Coupon {
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
+public class Coupon extends BaseTimeEntity {
 
-    private Long id;
-    private final String name;
-    private final DiscountType discountType;
-    private final Integer discountValue;
-    private final Integer maxIssueCount;
+    @Column(name = "name", nullable = false, length = 100)
+    private String name;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "discount_type", nullable = false, length = 20)
+    private DiscountType discountType;
+
+    @Column(name = "discount_value", nullable = false)
+    private Integer discountValue;
+
+    @Column(name = "max_issue_count", nullable = false)
+    private Integer maxIssueCount;
+
+    @Column(name = "current_issue_count", nullable = false)
     private Integer currentIssueCount;
-    private final LocalDateTime issueStartDate;
-    private final LocalDateTime issueEndDate;
-    private final Integer validPeriodDays;
-    private CouponStatus status;
-    private final LocalDateTime createdAt;
-    private LocalDateTime updatedAt;
 
-    /**
-     * 쿠폰 정책을 생성합니다.
-     *
-     * @param name 쿠폰 이름
-     * @param discountType 할인 타입
-     * @param discountValue 할인 값
-     * @param maxIssueCount 최대 발급 수량
-     * @param issueStartDate 발급 시작일
-     * @param issueEndDate 발급 종료일
-     * @param validPeriodDays 유효 기간 (일)
-     */
+    @Column(name = "issue_start_date", nullable = false)
+    private LocalDateTime issueStartDate;
+
+    @Column(name = "issue_end_date", nullable = false)
+    private LocalDateTime issueEndDate;
+
+    @Column(name = "valid_period_days", nullable = false)
+    private Integer validPeriodDays;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", nullable = false, length = 20)
+    private CouponStatus status;
+
     public Coupon(String name, DiscountType discountType, Integer discountValue,
                   Integer maxIssueCount, LocalDateTime issueStartDate,
                   LocalDateTime issueEndDate, Integer validPeriodDays) {
@@ -51,13 +62,9 @@ public class Coupon {
         this.issueEndDate = issueEndDate;
         this.validPeriodDays = validPeriodDays;
         this.status = CouponStatus.ACTIVE;
-        this.createdAt = LocalDateTime.now();
-        this.updatedAt = LocalDateTime.now();
+        initializeTimestamps();
     }
 
-    /**
-     * 생성자 파라미터를 검증합니다.
-     */
     private void validateConstructorParams(String name, DiscountType discountType,
                                             Integer discountValue, Integer maxIssueCount,
                                             LocalDateTime issueStartDate, LocalDateTime issueEndDate,
@@ -91,23 +98,6 @@ public class Coupon {
         }
     }
 
-    /**
-     * 쿠폰 ID를 설정합니다. (Repository에서 저장 후 호출)
-     *
-     * @param id 쿠폰 ID
-     */
-    public void setId(Long id) {
-        this.id = id;
-    }
-
-    /**
-     * 쿠폰 발급이 가능한지 확인합니다.
-     * - 쿠폰이 ACTIVE 상태여야 함
-     * - 현재 시간이 발급 기간 내여야 함
-     * - 남은 발급 수량이 있어야 함
-     *
-     * @return 발급 가능하면 true
-     */
     public boolean canIssue() {
         if (status != CouponStatus.ACTIVE) {
             return false;
@@ -118,22 +108,11 @@ public class Coupon {
         return currentIssueCount < maxIssueCount;
     }
 
-    /**
-     * 현재 시간이 발급 기간 내인지 확인합니다.
-     *
-     * @return 발급 기간 내이면 true
-     */
     public boolean isWithinIssuePeriod() {
         LocalDateTime now = LocalDateTime.now();
         return !now.isBefore(issueStartDate) && !now.isAfter(issueEndDate);
     }
 
-    /**
-     * 쿠폰을 발급합니다.
-     * 발급 가능 여부를 확인한 후 발급 수량을 증가시킵니다.
-     *
-     * @throws IllegalStateException 발급 불가능한 경우
-     */
     public void issue() {
         if (status != CouponStatus.ACTIVE) {
             throw new IllegalStateException("비활성화된 쿠폰은 발급할 수 없습니다");
@@ -145,42 +124,25 @@ public class Coupon {
             throw new IllegalStateException("발급 가능한 수량이 없습니다");
         }
         this.currentIssueCount++;
-        this.updatedAt = LocalDateTime.now();
+        updateTimestamp();
     }
 
-    /**
-     * 남은 발급 가능 수량을 반환합니다.
-     *
-     * @return 남은 수량
-     */
     public int getRemainingQuantity() {
         return Math.max(0, maxIssueCount - currentIssueCount);
     }
 
-    /**
-     * 쿠폰 상태를 변경합니다.
-     *
-     * @param status 변경할 상태
-     * @throws IllegalArgumentException status가 null인 경우
-     */
     public void updateStatus(CouponStatus status) {
         if (status == null) {
             throw new IllegalArgumentException("상태는 필수입니다");
         }
         this.status = status;
-        this.updatedAt = LocalDateTime.now();
+        updateTimestamp();
     }
 
-    /**
-     * 쿠폰을 활성화합니다.
-     */
     public void activate() {
         updateStatus(CouponStatus.ACTIVE);
     }
 
-    /**
-     * 쿠폰을 비활성화합니다.
-     */
     public void deactivate() {
         updateStatus(CouponStatus.INACTIVE);
     }

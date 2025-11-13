@@ -24,4 +24,6 @@ public interface PointHistoryRepository {
      * @return 포인트 이력 목록
      */
     List<PointHistory> findByUserId(Long userId);
+
+    void deleteAll();
 }

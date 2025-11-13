@@ -71,21 +71,6 @@ class PointHistoryTest {
     }
 
     @Test
-    @DisplayName("사용자 ID가 null이면 예외가 발생한다")
-    void createPointHistory_ShouldThrowException_WhenUserIdIsNull() {
-        // when & then
-        assertThatThrownBy(() -> new PointHistory(
-                null,
-                TransactionType.CHARGE,
-                50000,
-                50000,
-                "포인트 충전"
-        ))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("사용자 ID는 필수");
-    }
-
-    @Test
     @DisplayName("거래 타입이 null이면 예외가 발생한다")
     void createPointHistory_ShouldThrowException_WhenTransactionTypeIsNull() {
         // when & then

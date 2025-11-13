@@ -44,4 +44,6 @@ public interface CouponRepository {
      * @return 작업 결과
      */
     <R> R executeWithLock(Long couponId, Function<Coupon, R> operation);
+
+    void deleteAll();
 }

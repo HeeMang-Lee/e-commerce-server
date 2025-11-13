@@ -65,19 +65,6 @@ class OrderItemTest {
     }
 
     @Test
-    @DisplayName("주문 ID가 null이면 예외가 발생한다")
-    void setOrderId_ShouldThrowException_WhenNull() {
-        // given
-        Product product = new Product(1L, "무선 키보드", "무선 키보드 설명", 89000, 10, "전자제품");
-        OrderItem orderItem = new OrderItem(product, 1);
-
-        // when & then
-        assertThatThrownBy(() -> orderItem.setOrderId(null))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("주문 ID는 필수");
-    }
-
-    @Test
     @DisplayName("주문 항목 상태를 변경할 수 있다")
     void updateStatus_ShouldChangeStatus() throws InterruptedException {
         // given

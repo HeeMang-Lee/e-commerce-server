@@ -23,10 +23,10 @@ public class OrderService {
     private final UserRepository userRepository;
     private final ProductRepository productRepository;
     private final OrderRepository orderRepository;
+    private final OrderItemRepository orderItemRepository;
     private final OrderPaymentRepository orderPaymentRepository;
     private final UserCouponRepository userCouponRepository;
     private final PointHistoryRepository pointHistoryRepository;
-    private final PopularProductRepository popularProductRepository;
     private final OutboxEventRepository outboxEventRepository;
     private final DataPlatformService dataPlatformService;
 
@@ -37,24 +37,32 @@ public class OrderService {
     public OrderResponse createOrder(OrderRequest request) {
         User user = userRepository.getByIdOrThrow(request.userId());
 
+        // 1. Order 먼저 생성 & 저장 (ID 생성)
+        Order order = new Order(user.getId());
+        orderRepository.save(order);
+
+        // 2. OrderItem 생성 및 저장
         List<OrderItem> orderItems = new ArrayList<>();
         for (OrderRequest.OrderItemRequest itemReq : request.items()) {
             OrderItem orderItem = productRepository.executeWithLock(
                     itemReq.productId(),
                     product -> {
                         product.reduceStock(itemReq.quantity());
-                        return new OrderItem(product, itemReq.quantity());
+                        OrderItem item = new OrderItem(product, itemReq.quantity());
+                        item.setOrderId(order.getId());
+                        return item;
                     }
             );
             orderItems.add(orderItem);
         }
+        orderItemRepository.saveAll(orderItems);
 
-        Order order = new Order(user.getId(), orderItems);
-        orderRepository.save(order);
+        // 3. 총 금액 계산 (Service 레이어에서)
+        int totalAmount = orderItems.stream()
+                .mapToInt(OrderItem::getItemTotalAmount)
+                .sum();
 
-        int totalAmount = order.calculateTotalAmount();
         int discountAmount = 0;
-
         if (request.userCouponId() != null) {
             UserCoupon userCoupon = userCouponRepository.getByIdOrThrow(request.userCouponId());
             // TODO: 쿠폰 타입에 따라 할인 금액 계산
@@ -82,15 +90,38 @@ public class OrderService {
     }
 
     public List<OrderHistoryResponse> getOrderHistory(Long userId) {
+        // 1. 사용자의 모든 주문 조회
         List<Order> orders = orderRepository.findByUserId(userId);
+
+        if (orders.isEmpty()) {
+            return List.of();
+        }
+
+        // 2. 모든 주문의 ID 추출
+        List<Long> orderIds = orders.stream()
+                .map(Order::getId)
+                .toList();
+
+        // 3. IN 절로 모든 주문 아이템을 한 번에 조회 (N+1 문제 해결)
+        List<OrderItem> allOrderItems = orderItemRepository.findByOrderIdIn(orderIds);
+
+        // 4. orderId를 키로 하는 Map으로 그룹핑
+        var orderItemsMap = allOrderItems.stream()
+                .collect(java.util.stream.Collectors.groupingBy(OrderItem::getOrderId));
+
+        // 5. 각 주문에 해당하는 아이템을 매핑
         return orders.stream()
-                .map(OrderHistoryResponse::from)
+                .map(order -> {
+                    List<OrderItem> items = orderItemsMap.getOrDefault(order.getId(), List.of());
+                    return OrderHistoryResponse.from(order, items);
+                })
                 .toList();
     }
 
     public OrderHistoryResponse getOrder(Long orderId) {
         Order order = orderRepository.getByIdOrThrow(orderId);
-        return OrderHistoryResponse.from(order);
+        List<OrderItem> items = orderItemRepository.findByOrderId(orderId);
+        return OrderHistoryResponse.from(order, items);
     }
 
     /**
@@ -132,15 +163,6 @@ public class OrderService {
             payment.complete();
             orderPaymentRepository.save(payment);
 
-            LocalDateTime now = LocalDateTime.now();
-            for (OrderItem item : order.getItems()) {
-                popularProductRepository.recordSale(
-                        item.getProductId(),
-                        item.getQuantity(),
-                        now
-                );
-            }
-
             String orderData = "{\"orderId\":" + order.getId() +
                     ",\"orderNumber\":\"" + order.getOrderNumber() +
                     "\",\"userId\":" + user.getId() +
@@ -173,7 +195,8 @@ public class OrderService {
 
         } catch (Exception e) {
             log.error("결제 처리 중 오류 발생, 재고 복구: orderId={}", orderId, e);
-            for (OrderItem item : order.getItems()) {
+            List<OrderItem> orderItems = orderItemRepository.findByOrderId(orderId);
+            for (OrderItem item : orderItems) {
                 productRepository.executeWithLock(
                         item.getProductId(),
                         product -> {

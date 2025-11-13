@@ -19,4 +19,6 @@ public interface OutboxEventRepository {
      * 특정 상태의 이벤트 목록을 조회합니다.
      */
     List<OutboxEvent> findByStatus(OutboxStatus status);
+
+    void deleteAll();
 }
