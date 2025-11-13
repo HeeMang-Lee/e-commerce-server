@@ -35,7 +35,8 @@ CREATE TABLE orders (
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 
     INDEX idx_user_created (user_id, created_at),
-    INDEX idx_order_number (order_number)
+    INDEX idx_order_number (order_number),
+    INDEX idx_created_at (created_at)  -- PopularProduct 쿼리 최적화를 위한 인덱스
 );
 
 CREATE TABLE order_items (
@@ -53,7 +54,8 @@ CREATE TABLE order_items (
     INDEX idx_order (order_id),
     INDEX idx_product (product_id),
     INDEX idx_status (status),
-    INDEX idx_created (created_at)
+    INDEX idx_created (created_at),
+    INDEX idx_order_product_quantity (order_id, product_id, quantity)  -- PopularProduct 쿼리를 위한 커버링 인덱스
 );
 
 CREATE TABLE order_payments (
