@@ -90,10 +90,29 @@ public class OrderService {
     }
 
     public List<OrderHistoryResponse> getOrderHistory(Long userId) {
+        // 1. 사용자의 모든 주문 조회
         List<Order> orders = orderRepository.findByUserId(userId);
+
+        if (orders.isEmpty()) {
+            return List.of();
+        }
+
+        // 2. 모든 주문의 ID 추출
+        List<Long> orderIds = orders.stream()
+                .map(Order::getId)
+                .toList();
+
+        // 3. IN 절로 모든 주문 아이템을 한 번에 조회 (N+1 문제 해결)
+        List<OrderItem> allOrderItems = orderItemRepository.findByOrderIdIn(orderIds);
+
+        // 4. orderId를 키로 하는 Map으로 그룹핑
+        var orderItemsMap = allOrderItems.stream()
+                .collect(java.util.stream.Collectors.groupingBy(OrderItem::getOrderId));
+
+        // 5. 각 주문에 해당하는 아이템을 매핑
         return orders.stream()
                 .map(order -> {
-                    List<OrderItem> items = orderItemRepository.findByOrderId(order.getId());
+                    List<OrderItem> items = orderItemsMap.getOrDefault(order.getId(), List.of());
                     return OrderHistoryResponse.from(order, items);
                 })
                 .toList();
