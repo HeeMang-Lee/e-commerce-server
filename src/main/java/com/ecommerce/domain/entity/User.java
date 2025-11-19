@@ -20,6 +20,9 @@ import java.time.LocalDateTime;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class User extends BaseTimeEntity {
 
+    @Version
+    private Long version;
+
     @Column(name = "name", nullable = false, length = 100)
     private String name;
 
