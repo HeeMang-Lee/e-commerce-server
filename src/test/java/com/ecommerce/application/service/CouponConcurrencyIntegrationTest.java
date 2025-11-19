@@ -130,6 +130,7 @@ class CouponConcurrencyIntegrationTest {
         CountDownLatch doneLatch = new CountDownLatch(threadCount);
 
         AtomicInteger successCount = new AtomicInteger(0);
+        AtomicInteger failCount = new AtomicInteger(0);
 
         // when
         for (int i = 0; i < threadCount; i++) {
@@ -142,7 +143,8 @@ class CouponConcurrencyIntegrationTest {
                     successCount.incrementAndGet();
 
                 } catch (Exception e) {
-                    // 중복 발급이거나 다른 이유로 실패
+                    // UNIQUE 제약 조건 위반 또는 중복 발급으로 실패
+                    failCount.incrementAndGet();
                 } finally {
                     doneLatch.countDown();
                 }
@@ -155,10 +157,13 @@ class CouponConcurrencyIntegrationTest {
 
         // then
         Coupon resultCoupon = couponRepository.findById(savedCoupon.getId()).orElseThrow();
-        // 현재 구현에서는 중복 발급 체크가 없으므로 여러 번 성공할 수 있음
-        // 실제 비즈니스 로직에서는 UserCoupon의 (userId, couponId) 유니크 제약이 필요
-        assertThat(successCount.get()).isGreaterThan(0);  // 최소 1번은 성공
-        assertThat(resultCoupon.getCurrentIssueCount()).isEqualTo(successCount.get());
+        long issuedCount = userCouponRepository.findByUserId(userId).size();
+
+        // UNIQUE 제약 조건으로 인해 정확히 1번만 발급되어야 함
+        assertThat(successCount.get()).isEqualTo(1);  // 정확히 1번만 성공
+        assertThat(failCount.get()).isEqualTo(9);     // 나머지 9번은 실패
+        assertThat(issuedCount).isEqualTo(1);         // 실제로 1개만 발급됨
+        assertThat(resultCoupon.getCurrentIssueCount()).isEqualTo(1);
     }
 
     @Test

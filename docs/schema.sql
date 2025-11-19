@@ -102,6 +102,7 @@ CREATE TABLE user_coupons (
     used_at TIMESTAMP,
     expires_at TIMESTAMP NOT NULL,
 
+    UNIQUE KEY uk_user_coupon (user_id, coupon_id),
     INDEX idx_user_status (user_id, status),
     INDEX idx_coupon (coupon_id),
     INDEX idx_expires (expires_at)

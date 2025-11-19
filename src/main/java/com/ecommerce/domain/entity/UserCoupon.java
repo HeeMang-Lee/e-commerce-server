@@ -14,7 +14,12 @@ import java.time.LocalDateTime;
  * 사용자에게 발급된 쿠폰을 관리합니다.
  */
 @Entity
-@Table(name = "user_coupons")
+@Table(
+    name = "user_coupons",
+    uniqueConstraints = {
+        @UniqueConstraint(name = "uk_user_coupon", columnNames = {"user_id", "coupon_id"})
+    }
+)
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class UserCoupon extends BaseEntity {
