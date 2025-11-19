@@ -82,7 +82,6 @@ public class Product extends BaseTimeEntity {
     /**
      * 재고가 충분한지 확인합니다.
      *
-     * @param quantity 확인할 수량
      * @return 재고가 충분하면 true, 부족하면 false
      */
     public boolean hasStock(int quantity) {
@@ -92,7 +91,6 @@ public class Product extends BaseTimeEntity {
     /**
      * 재고를 차감합니다.
      *
-     * @param quantity 차감할 수량
      * @throws IllegalArgumentException 수량이 0 이하인 경우
      * @throws IllegalStateException 재고가 부족한 경우
      */
@@ -112,7 +110,6 @@ public class Product extends BaseTimeEntity {
     /**
      * 재고를 복구합니다.
      *
-     * @param quantity 복구할 수량
      * @throws IllegalArgumentException 수량이 0 이하인 경우
      */
     public void restoreStock(int quantity) {
@@ -126,8 +123,6 @@ public class Product extends BaseTimeEntity {
     /**
      * 주어진 수량에 대한 총 가격을 계산합니다.
      *
-     * @param quantity 수량
-     * @return 총 가격
      * @throws IllegalArgumentException 수량이 1 미만인 경우
      */
     public int calculatePrice(int quantity) {
@@ -139,8 +134,6 @@ public class Product extends BaseTimeEntity {
 
     /**
      * 상품 상태를 변경합니다.
-     *
-     * @param status 변경할 상태
      */
     public void changeStatus(ProductStatus status) {
         if (status == null) {

@@ -22,8 +22,6 @@ public class ProductService {
 
     /**
      * 모든 상품 목록을 조회합니다.
-     *
-     * @return 상품 목록
      */
     public List<ProductResponse> getProducts() {
         return productRepository.findAll().stream()
@@ -33,9 +31,6 @@ public class ProductService {
 
     /**
      * 상품을 단건 조회합니다.
-     *
-     * @param productId 상품 ID
-     * @return 상품 정보
      */
     public ProductResponse getProduct(Long productId) {
         Product product = productRepository.getByIdOrThrow(productId);
@@ -44,8 +39,6 @@ public class ProductService {
 
     /**
      * 최근 3일간 판매량 기준 인기 상품 Top 5를 조회합니다.
-     *
-     * @return 인기 상품 목록
      */
     public List<ProductResponse> getTopProductsLast3Days() {
         LocalDateTime endTime = LocalDateTime.now();

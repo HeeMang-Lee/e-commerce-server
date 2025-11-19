@@ -9,20 +9,8 @@ import java.util.List;
  */
 public interface PointHistoryRepository {
 
-    /**
-     * 포인트 이력을 저장합니다.
-     *
-     * @param history 저장할 포인트 이력
-     * @return 저장된 포인트 이력
-     */
     PointHistory save(PointHistory history);
 
-    /**
-     * 사용자 ID로 포인트 이력 목록을 조회합니다.
-     *
-     * @param userId 사용자 ID
-     * @return 포인트 이력 목록
-     */
     List<PointHistory> findByUserId(Long userId);
 
     void deleteAll();

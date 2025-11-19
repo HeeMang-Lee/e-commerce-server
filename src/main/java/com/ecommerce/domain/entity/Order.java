@@ -40,8 +40,6 @@ public class Order extends BaseTimeEntity {
     /**
      * 주문 번호를 생성합니다.
      * 형식: ORD-{yyyyMMddHHmmss}-{나노초 끝 6자리}
-     *
-     * @return 생성된 주문 번호
      */
     private String generateOrderNumber() {
         LocalDateTime now = LocalDateTime.now();

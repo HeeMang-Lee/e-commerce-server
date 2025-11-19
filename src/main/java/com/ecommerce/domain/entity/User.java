@@ -62,7 +62,6 @@ public class User extends BaseTimeEntity {
     /**
      * 포인트가 충분한지 확인합니다.
      *
-     * @param amount 확인할 금액
      * @return 포인트가 충분하면 true
      */
     public boolean hasPoint(int amount) {
@@ -72,7 +71,6 @@ public class User extends BaseTimeEntity {
     /**
      * 포인트를 차감합니다.
      *
-     * @param amount 차감할 금액
      * @throws IllegalArgumentException 금액이 0 이하인 경우
      * @throws IllegalStateException 포인트가 부족한 경우
      */
@@ -93,7 +91,6 @@ public class User extends BaseTimeEntity {
     /**
      * 포인트를 충전합니다.
      *
-     * @param amount 충전할 금액
      * @throws IllegalArgumentException 금액이 0 이하인 경우
      */
     public void charge(int amount) {
