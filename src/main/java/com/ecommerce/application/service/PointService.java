@@ -10,6 +10,7 @@ import com.ecommerce.domain.repository.PointHistoryRepository;
 import com.ecommerce.domain.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
@@ -22,6 +23,7 @@ public class PointService {
     private final UserRepository userRepository;
     private final PointHistoryRepository pointHistoryRepository;
 
+    @Transactional
     public PointResponse chargePoint(PointChargeRequest request) {
         User user = userRepository.getByIdOrThrow(request.userId());
 
