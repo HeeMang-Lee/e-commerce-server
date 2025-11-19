@@ -82,6 +82,15 @@ public class UserCoupon extends BaseEntity {
         this.usedAt = LocalDateTime.now();
     }
 
+    public void restore() {
+        if (this.status != UserCouponStatus.USED) {
+            throw new IllegalStateException("사용된 쿠폰만 복구할 수 있습니다");
+        }
+
+        this.status = UserCouponStatus.AVAILABLE;
+        this.usedAt = null;
+    }
+
     public boolean isExpired() {
         return LocalDateTime.now().isAfter(expiresAt);
     }
