@@ -107,7 +107,7 @@ class OrderServiceTest {
         order.setId(1L);
 
         when(orderRepository.findByUserId(1L)).thenReturn(Arrays.asList(order));
-        when(orderItemRepository.findByOrderId(1L)).thenReturn(items);
+        when(orderItemRepository.findByOrderIdIn(Arrays.asList(1L))).thenReturn(items);
 
         // when
         List<OrderHistoryResponse> history = orderService.getOrderHistory(1L);
