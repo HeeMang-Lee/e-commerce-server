@@ -24,6 +24,12 @@ public class CouponService {
      * Lock을 사용하여 재고 차감과 사용자 쿠폰 생성의 원자성을 보장합니다.
      */
     public UserCouponResponse issueCoupon(CouponIssueRequest request) {
+        // 중복 발급 체크
+        userCouponRepository.findByUserIdAndCouponId(request.userId(), request.couponId())
+                .ifPresent(existingCoupon -> {
+                    throw new IllegalStateException("이미 발급받은 쿠폰입니다");
+                });
+
         UserCoupon userCoupon = couponRepository.executeWithLock(
                 request.couponId(),
                 coupon -> {
