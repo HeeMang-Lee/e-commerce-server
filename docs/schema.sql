@@ -5,6 +5,7 @@ CREATE TABLE users (
     name VARCHAR(100) NOT NULL,
     email VARCHAR(255) NOT NULL UNIQUE,
     point_balance DECIMAL(15,2) NOT NULL DEFAULT 0,
+    version BIGINT NOT NULL DEFAULT 0,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 
@@ -101,6 +102,7 @@ CREATE TABLE user_coupons (
     used_at TIMESTAMP,
     expires_at TIMESTAMP NOT NULL,
 
+    UNIQUE KEY uk_user_coupon (user_id, coupon_id),
     INDEX idx_user_status (user_id, status),
     INDEX idx_coupon (coupon_id),
     INDEX idx_expires (expires_at)

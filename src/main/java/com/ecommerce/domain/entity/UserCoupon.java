@@ -14,7 +14,12 @@ import java.time.LocalDateTime;
  * 사용자에게 발급된 쿠폰을 관리합니다.
  */
 @Entity
-@Table(name = "user_coupons")
+@Table(
+    name = "user_coupons",
+    uniqueConstraints = {
+        @UniqueConstraint(name = "uk_user_coupon", columnNames = {"user_id", "coupon_id"})
+    }
+)
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class UserCoupon extends BaseEntity {
@@ -75,6 +80,15 @@ public class UserCoupon extends BaseEntity {
 
         this.status = UserCouponStatus.USED;
         this.usedAt = LocalDateTime.now();
+    }
+
+    public void restore() {
+        if (this.status != UserCouponStatus.USED) {
+            throw new IllegalStateException("사용된 쿠폰만 복구할 수 있습니다");
+        }
+
+        this.status = UserCouponStatus.AVAILABLE;
+        this.usedAt = null;
     }
 
     public boolean isExpired() {

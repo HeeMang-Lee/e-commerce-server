@@ -20,11 +20,10 @@ public class PopularProductRepositoryImpl implements PopularProductRepository {
         // 쿼리 최적화: orders를 먼저 날짜로 필터링 후 order_items와 조인
         // - orders 테이블: idx_created_at 인덱스로 날짜 필터링 (range 스캔)
         // - order_items 테이블: idx_order_product_quantity 커버링 인덱스로 조인 및 집계
-        //   → FORCE INDEX 사용으로 테이블 액세스 없이 인덱스만으로 처리 (52% 성능 개선)
         String sql = """
             SELECT oi.product_id
             FROM orders o
-            INNER JOIN order_items oi FORCE INDEX (idx_order_product_quantity)
+            INNER JOIN order_items oi
               ON o.id = oi.order_id
             WHERE o.created_at >= :startTime AND o.created_at < :endTime
             GROUP BY oi.product_id

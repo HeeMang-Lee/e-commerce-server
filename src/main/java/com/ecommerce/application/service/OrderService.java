@@ -120,7 +120,7 @@ public class OrderService {
     /**
      * 결제를 처리합니다.
      * 포인트/쿠폰 사용, 결제 완료, 판매 이력 기록, 외부 데이터 전송을 수행하며
-     * 실패 시 재고를 복구합니다.
+     * 실패 시 재고, 포인트, 쿠폰을 복구합니다.
      */
     public PaymentResponse processPayment(Long orderId, PaymentRequest request) {
         Order order = orderRepository.getByIdOrThrow(orderId);
@@ -131,8 +131,11 @@ public class OrderService {
             throw new IllegalStateException("이미 완료된 결제입니다");
         }
 
+        int usedPoint = request.usePoint() != null ? request.usePoint() : 0;
+        boolean pointDeducted = false;
+        boolean couponUsed = false;
+
         try {
-            int usedPoint = request.usePoint() != null ? request.usePoint() : 0;
             if (usedPoint > 0) {
                 user.deduct(usedPoint);
                 userRepository.save(user);
@@ -145,12 +148,14 @@ public class OrderService {
                         orderId
                 );
                 pointHistoryRepository.save(history);
+                pointDeducted = true;
             }
 
             if (payment.getUserCouponId() != null) {
                 UserCoupon userCoupon = userCouponRepository.getByIdOrThrow(payment.getUserCouponId());
                 userCoupon.use();
                 userCouponRepository.save(userCoupon);
+                couponUsed = true;
             }
 
             payment.complete();
@@ -187,7 +192,9 @@ public class OrderService {
             );
 
         } catch (Exception e) {
-            log.error("결제 처리 중 오류 발생, 재고 복구: orderId={}", orderId, e);
+            log.error("결제 처리 중 오류 발생, 보상 트랜잭션 시작: orderId={}", orderId, e);
+
+            // 1. 재고 복구
             List<OrderItem> orderItems = orderItemRepository.findByOrderId(orderId);
             for (OrderItem item : orderItems) {
                 productRepository.executeWithLock(
@@ -198,8 +205,35 @@ public class OrderService {
                         }
                 );
             }
+
+            // 2. 포인트 복구
+            if (pointDeducted) {
+                User userToRestore = userRepository.getByIdOrThrow(order.getUserId());
+                userToRestore.charge(usedPoint);
+                userRepository.save(userToRestore);
+                PointHistory restoreHistory = new PointHistory(
+                        userToRestore.getId(),
+                        TransactionType.REFUND,
+                        usedPoint,
+                        userToRestore.getPointBalance(),
+                        "결제 실패로 인한 포인트 환불",
+                        orderId
+                );
+                pointHistoryRepository.save(restoreHistory);
+                log.info("포인트 복구 완료: userId={}, amount={}", userToRestore.getId(), usedPoint);
+            }
+
+            // 3. 쿠폰 복구
+            if (couponUsed && payment.getUserCouponId() != null) {
+                UserCoupon userCoupon = userCouponRepository.getByIdOrThrow(payment.getUserCouponId());
+                userCoupon.restore();
+                userCouponRepository.save(userCoupon);
+                log.info("쿠폰 복구 완료: userCouponId={}", userCoupon.getId());
+            }
+
             payment.fail();
             orderPaymentRepository.save(payment);
+            log.info("보상 트랜잭션 완료: orderId={}", orderId);
             throw e;
         }
     }
