@@ -18,5 +18,7 @@ public interface UserCouponRepository {
 
     List<UserCoupon> findByUserId(Long userId);
 
+    Optional<UserCoupon> findByUserIdAndCouponId(Long userId, Long couponId);
+
     void deleteAll();
 }
