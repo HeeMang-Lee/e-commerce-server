@@ -4,6 +4,7 @@ import com.ecommerce.dto.ApiResponse;
 import com.ecommerce.dto.ResponseCode;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -58,6 +59,25 @@ public class GlobalExceptionHandler {
         ApiResponse<Void> response = ApiResponse.fail(ResponseCode.BAD_REQUEST, e.getMessage());
         return ResponseEntity
                 .status(ResponseCode.BAD_REQUEST.getHttpStatus())
+                .body(response);
+    }
+
+    /**
+     * ObjectOptimisticLockingFailureException 처리
+     * 낙관적 락 충돌이 발생한 경우입니다.
+     * 동시에 같은 데이터를 수정하려고 할 때 발생하며, 클라이언트는 재시도를 통해 처리할 수 있습니다.
+     */
+    @ExceptionHandler(ObjectOptimisticLockingFailureException.class)
+    public ResponseEntity<ApiResponse<Void>> handleOptimisticLockingFailureException(ObjectOptimisticLockingFailureException e) {
+        log.warn("OptimisticLockingFailureException: entity={}, identifier={}",
+                e.getPersistentClassName(), e.getIdentifier());
+
+        ApiResponse<Void> response = ApiResponse.fail(
+                ResponseCode.CONFLICT,
+                "동시 수정이 발생했습니다. 다시 시도해주세요."
+        );
+        return ResponseEntity
+                .status(ResponseCode.CONFLICT.getHttpStatus())
                 .body(response);
     }
 
