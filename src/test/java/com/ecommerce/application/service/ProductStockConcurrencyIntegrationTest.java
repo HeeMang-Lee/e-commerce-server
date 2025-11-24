@@ -7,6 +7,7 @@ import com.ecommerce.domain.entity.User;
 import com.ecommerce.domain.repository.*;
 import com.ecommerce.infrastructure.external.DataPlatformService;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -66,6 +67,19 @@ class ProductStockConcurrencyIntegrationTest {
 
     @Autowired
     private OrderService orderService;
+
+    @BeforeEach
+    void setUp() {
+        // 테스트 격리를 위해 먼저 정리
+        pointHistoryRepository.deleteAll();
+        orderPaymentRepository.deleteAll();
+        orderItemRepository.deleteAll();
+        orderRepository.deleteAll();
+        userCouponRepository.deleteAll();
+        productRepository.deleteAll();
+        userRepository.deleteAll();
+        outboxEventRepository.deleteAll();
+    }
 
     @AfterEach
     void tearDown() {
