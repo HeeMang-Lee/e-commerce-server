@@ -36,17 +36,24 @@
 
 선착순 쿠폰도 마찬가지다. 하나의 쿠폰 레코드를 수만 명이 동시에 접근한다.
 
-### 경합이 거의 없는 리소스: 포인트
+### 경합이 적은 리소스: 포인트
 
 ```
 사용자 A: 내 포인트 50,000원 차감
 사용자 B: 내 포인트 30,000원 차감
 
 → 서로 다른 User 레코드
-→ 경합 없음
+→ 경합 없음 (사용자 간)
+
+하지만 같은 사용자의 경우:
+사용자 A: 포인트 충전 요청 (+10,000원)
+사용자 A: 동시에 포인트 사용 요청 (-5,000원)
+
+→ 같은 User 레코드
+→ 경합 발생 가능
 ```
 
-포인트는 다르다. 각 사용자가 자기 포인트만 건드린다. 다른 사람과 충돌할 일이 없다.
+포인트는 재고나 쿠폰과 다르다. 대부분의 경우 각 사용자가 자기 포인트만 건드리기 때문에 다른 사람과 충돌할 일이 없다. 하지만 같은 사용자가 충전과 사용을 동시에 하거나, 여러 주문을 동시에 결제하는 경우에는 충돌이 발생할 수 있다. 이런 경우는 드물기 때문에 낙관적 락으로 충분하다.
 
 ## 비관적 락 vs 낙관적 락
 
@@ -130,7 +137,7 @@ Optional<Product> findByIdWithLock(@Param("id") Long id);
 ```java
 // CouponService.java
 public UserCouponResponse issueCoupon(CouponIssueRequest request) {
-    // 중복 발급 체크
+    // 중복 발급 체크 (SELECT로 먼저 확인)
     userCouponRepository.findByUserIdAndCouponId(request.userId(), request.couponId())
         .ifPresent(existingCoupon -> {
             throw new IllegalStateException("이미 발급받은 쿠폰입니다");
@@ -143,7 +150,7 @@ public UserCouponResponse issueCoupon(CouponIssueRequest request) {
 
             LocalDateTime expiresAt = LocalDateTime.now().plusDays(coupon.getValidPeriodDays());
             UserCoupon newUserCoupon = new UserCoupon(request.userId(), request.couponId(), expiresAt);
-            userCouponRepository.save(newUserCoupon);
+            userCouponRepository.save(newUserCoupon);  // INSERT 시점에 UNIQUE 제약 검증
 
             return newUserCoupon;
         }
@@ -170,7 +177,7 @@ CREATE TABLE user_coupons (
 );
 ```
 
-애플리케이션 레벨에서 체크하고, 마지막 방어선으로 DB UNIQUE 제약을 추가했다. 동시 요청이 들어와도 DB가 막아준다.
+애플리케이션 레벨에서 먼저 SELECT로 체크하지만, SELECT 이후 INSERT 전에 다른 트랜잭션이 끼어들 수 있다. 그래서 마지막 방어선으로 DB UNIQUE 제약을 추가했다. 동시 요청이 들어와 SELECT를 통과하더라도, INSERT 시점에 DB가 막아준다.
 
 ### 포인트: 낙관적 락
 
@@ -286,6 +293,8 @@ public PaymentResponse processPayment(Long orderId, PaymentRequest request) {
 ```
 
 성능이 24,000배 개선됐다.
+
+물론 트랜잭션을 분리하면 트레이드오프가 있다. 트랜잭션마다 새로운 DB 커넥션을 획득하고 해제하는 비용, 네트워크 I/O 비용이 추가로 발생한다. 하지만 이 비용(수 ms)은 락 대기 시간(수 초~분)에 비하면 무시할 수 있는 수준이다. 특히 동시성이 높은 상황에서는 락 유지 시간을 줄이는 것이 훨씬 더 중요하다.
 
 ## 보상 트랜잭션
 
