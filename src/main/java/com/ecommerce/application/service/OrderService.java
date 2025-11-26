@@ -23,7 +23,7 @@ public class OrderService {
 
     private static final String EVENT_TYPE_ORDER_COMPLETED = "ORDER_COMPLETED";
     private static final String POINT_DESCRIPTION_ORDER_PAYMENT = "주문 결제";
-    private static final String LOCK_KEY_PREFIX = "ecommerce:lock:product:stock:";
+    private static final String LOCK_KEY_PREFIX = "lock:stock:";
 
     private final UserRepository userRepository;
     private final ProductRepository productRepository;
@@ -35,6 +35,8 @@ public class OrderService {
     private final OutboxEventRepository outboxEventRepository;
     private final DataPlatformService dataPlatformService;
     private final RedissonClient redissonClient;
+    private final PointService pointService;
+    private final CouponService couponService;
 
     /**
      * 주문을 생성합니다. 재고를 차감하고 PENDING 상태의 결제 정보를 생성합니다.
@@ -196,7 +198,6 @@ public class OrderService {
      */
     public PaymentResponse processPayment(Long orderId, PaymentRequest request) {
         Order order = orderRepository.getByIdOrThrow(orderId);
-        User user = userRepository.getByIdOrThrow(order.getUserId());
         OrderPayment payment = orderPaymentRepository.getByOrderIdOrThrow(orderId);
 
         if (payment.getPaymentStatus() == PaymentStatus.COMPLETED) {
@@ -208,25 +209,15 @@ public class OrderService {
         boolean couponUsed = false;
 
         try {
+            // 포인트 차감 (PointService 호출 - 락 포함)
             if (usedPoint > 0) {
-                user.deduct(usedPoint);
-                userRepository.save(user);
-                PointHistory history = new PointHistory(
-                        user.getId(),
-                        TransactionType.USE,
-                        usedPoint,
-                        user.getPointBalance(),
-                        POINT_DESCRIPTION_ORDER_PAYMENT,
-                        orderId
-                );
-                pointHistoryRepository.save(history);
+                pointService.deductPoint(order.getUserId(), usedPoint, POINT_DESCRIPTION_ORDER_PAYMENT, orderId);
                 pointDeducted = true;
             }
 
+            // 쿠폰 사용 (CouponService 호출 - 락 포함)
             if (payment.getUserCouponId() != null) {
-                UserCoupon userCoupon = userCouponRepository.getByIdOrThrow(payment.getUserCouponId());
-                userCoupon.use();
-                userCouponRepository.save(userCoupon);
+                couponService.useCoupon(payment.getUserCouponId());
                 couponUsed = true;
             }
 
@@ -235,7 +226,7 @@ public class OrderService {
 
             String orderData = "{\"orderId\":" + order.getId() +
                     ",\"orderNumber\":\"" + order.getOrderNumber() +
-                    "\",\"userId\":" + user.getId() +
+                    "\",\"userId\":" + order.getUserId() +
                     ",\"totalAmount\":" + payment.getOriginalAmount() +
                     ",\"finalAmount\":" + payment.getFinalAmount() + "}";
 
@@ -272,24 +263,13 @@ public class OrderService {
                 restoreStockWithLock(item.getProductId(), item.getQuantity());
             }
 
-            // 2. 포인트 복구
+            // 2. 포인트 복구 (PointService 호출 - 락 포함)
             if (pointDeducted) {
-                User userToRestore = userRepository.getByIdOrThrow(order.getUserId());
-                userToRestore.charge(usedPoint);
-                userRepository.save(userToRestore);
-                PointHistory restoreHistory = new PointHistory(
-                        userToRestore.getId(),
-                        TransactionType.REFUND,
-                        usedPoint,
-                        userToRestore.getPointBalance(),
-                        "결제 실패로 인한 포인트 환불",
-                        orderId
-                );
-                pointHistoryRepository.save(restoreHistory);
-                log.info("포인트 복구 완료: userId={}, amount={}", userToRestore.getId(), usedPoint);
+                pointService.chargePoint(new PointChargeRequest(order.getUserId(), usedPoint));
+                log.info("포인트 복구 완료: userId={}, amount={}", order.getUserId(), usedPoint);
             }
 
-            // 3. 쿠폰 복구
+            // 3. 쿠폰 복구 (직접 처리 - 복구는 단순하므로)
             if (couponUsed && payment.getUserCouponId() != null) {
                 UserCoupon userCoupon = userCouponRepository.getByIdOrThrow(payment.getUserCouponId());
                 userCoupon.restore();

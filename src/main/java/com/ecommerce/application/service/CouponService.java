@@ -20,7 +20,8 @@ import java.util.concurrent.TimeUnit;
 @RequiredArgsConstructor
 public class CouponService {
 
-    private static final String LOCK_KEY_PREFIX = "ecommerce:lock:coupon:issue:";
+    private static final String LOCK_KEY_PREFIX_COUPON = "lock:coupon:";
+    private static final String LOCK_KEY_PREFIX_USERCOUPON = "lock:usercoupon:";
 
     private final CouponRepository couponRepository;
     private final UserCouponRepository userCouponRepository;
@@ -37,7 +38,7 @@ public class CouponService {
                     throw new IllegalStateException("이미 발급받은 쿠폰입니다");
                 });
 
-        String lockKey = LOCK_KEY_PREFIX + request.couponId();
+        String lockKey = LOCK_KEY_PREFIX_COUPON + request.couponId();
         RLock lock = redissonClient.getLock(lockKey);
 
         try {
@@ -77,6 +78,44 @@ public class CouponService {
         userCouponRepository.save(newUserCoupon);
 
         return newUserCoupon;
+    }
+
+    /**
+     * 쿠폰을 사용합니다.
+     * Redis 분산 락을 사용하여 동시성 제어를 수행합니다.
+     */
+    public UserCouponResponse useCoupon(Long userCouponId) {
+        String lockKey = LOCK_KEY_PREFIX_USERCOUPON + userCouponId;
+        RLock lock = redissonClient.getLock(lockKey);
+
+        try {
+            boolean acquired = lock.tryLock(5, 10, TimeUnit.SECONDS);
+            if (!acquired) {
+                throw new IllegalStateException("쿠폰 사용 락 획득 실패: userCouponId=" + userCouponId);
+            }
+
+            UserCoupon userCoupon = executeUseCoupon(userCouponId);
+            return UserCouponResponse.from(userCoupon);
+
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("락 획득 중 인터럽트 발생", e);
+        } finally {
+            if (lock.isHeldByCurrentThread()) {
+                lock.unlock();
+            }
+        }
+    }
+
+    /**
+     * 쿠폰 사용 트랜잭션 처리 (락 획득 후 실행)
+     */
+    @Transactional
+    private UserCoupon executeUseCoupon(Long userCouponId) {
+        UserCoupon userCoupon = userCouponRepository.getByIdOrThrow(userCouponId);
+        userCoupon.use();
+        userCouponRepository.save(userCoupon);
+        return userCoupon;
     }
 
     public List<UserCouponResponse> getUserCoupons(Long userId) {

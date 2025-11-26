@@ -22,7 +22,8 @@ import java.util.concurrent.TimeUnit;
 public class PointService {
 
     private static final String POINT_DESCRIPTION_CHARGE = "포인트 충전";
-    private static final String LOCK_KEY_PREFIX = "ecommerce:lock:user:point:";
+    private static final String POINT_DESCRIPTION_DEDUCT = "포인트 차감";
+    private static final String LOCK_KEY_PREFIX = "lock:point:";
 
     private final UserRepository userRepository;
     private final PointHistoryRepository pointHistoryRepository;
@@ -78,6 +79,55 @@ public class PointService {
 
     public PointResponse getPoint(Long userId) {
         User user = userRepository.getByIdOrThrow(userId);
+        return new PointResponse(user.getId(), user.getPointBalance());
+    }
+
+    /**
+     * 포인트를 차감합니다.
+     * Redis 분산 락을 사용하여 동시성 제어를 수행합니다.
+     */
+    public PointResponse deductPoint(Long userId, int amount, String description, Long orderId) {
+        String lockKey = LOCK_KEY_PREFIX + userId;
+        RLock lock = redissonClient.getLock(lockKey);
+
+        try {
+            boolean acquired = lock.tryLock(5, 10, TimeUnit.SECONDS);
+            if (!acquired) {
+                throw new IllegalStateException("포인트 차감 락 획득 실패: userId=" + userId);
+            }
+
+            return executeDeductPoint(userId, amount, description, orderId);
+
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("락 획득 중 인터럽트 발생", e);
+        } finally {
+            if (lock.isHeldByCurrentThread()) {
+                lock.unlock();
+            }
+        }
+    }
+
+    /**
+     * 포인트 차감 트랜잭션 처리 (락 획득 후 실행)
+     */
+    @Transactional
+    private PointResponse executeDeductPoint(Long userId, int amount, String description, Long orderId) {
+        User user = userRepository.getByIdOrThrow(userId);
+
+        user.deduct(amount);
+        userRepository.save(user);
+
+        PointHistory history = new PointHistory(
+                user.getId(),
+                TransactionType.USE,
+                amount,
+                user.getPointBalance(),
+                description,
+                orderId
+        );
+        pointHistoryRepository.save(history);
+
         return new PointResponse(user.getId(), user.getPointBalance());
     }
 
