@@ -80,6 +80,17 @@ class MultiResourceConcurrencyIntegrationTest {
 
     @BeforeEach
     void setUp() {
+        // 테스트 격리를 위해 먼저 정리
+        pointHistoryRepository.deleteAll();
+        orderPaymentRepository.deleteAll();
+        orderItemRepository.deleteAll();
+        orderRepository.deleteAll();
+        userCouponRepository.deleteAll();
+        couponRepository.deleteAll();
+        productRepository.deleteAll();
+        userRepository.deleteAll();
+        outboxEventRepository.deleteAll();
+
         when(dataPlatformService.sendOrderData(anyString())).thenReturn(true);
 
         // 테스트 상품 생성
@@ -129,7 +140,6 @@ class MultiResourceConcurrencyIntegrationTest {
             userCoupons[i] = userCouponRepository.save(coupon);
 
             // 쿠폰 발급 수량 증가
-            Coupon c = couponRepository.findById(testCoupon.getId()).orElseThrow();
             couponRepository.executeWithLock(testCoupon.getId(), coupon1 -> {
                 coupon1.issue();
                 return null;
