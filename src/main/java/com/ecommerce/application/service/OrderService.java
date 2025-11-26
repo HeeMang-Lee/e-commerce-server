@@ -6,11 +6,15 @@ import com.ecommerce.domain.repository.*;
 import com.ecommerce.infrastructure.external.DataPlatformService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.redisson.api.RLock;
+import org.redisson.api.RedissonClient;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 @Slf4j
 @Service
@@ -19,6 +23,7 @@ public class OrderService {
 
     private static final String EVENT_TYPE_ORDER_COMPLETED = "ORDER_COMPLETED";
     private static final String POINT_DESCRIPTION_ORDER_PAYMENT = "주문 결제";
+    private static final String LOCK_KEY_PREFIX = "ecommerce:lock:product:stock:";
 
     private final UserRepository userRepository;
     private final ProductRepository productRepository;
@@ -29,6 +34,7 @@ public class OrderService {
     private final PointHistoryRepository pointHistoryRepository;
     private final OutboxEventRepository outboxEventRepository;
     private final DataPlatformService dataPlatformService;
+    private final RedissonClient redissonClient;
 
     /**
      * 주문을 생성합니다. 재고를 차감하고 PENDING 상태의 결제 정보를 생성합니다.
@@ -42,15 +48,7 @@ public class OrderService {
 
         List<OrderItem> orderItems = new ArrayList<>();
         for (OrderRequest.OrderItemRequest itemReq : request.items()) {
-            OrderItem orderItem = productRepository.executeWithLock(
-                    itemReq.productId(),
-                    product -> {
-                        product.reduceStock(itemReq.quantity());
-                        OrderItem item = new OrderItem(product, itemReq.quantity());
-                        item.setOrderId(order.getId());
-                        return item;
-                    }
-            );
+            OrderItem orderItem = reduceStockWithLock(order.getId(), itemReq.productId(), itemReq.quantity());
             orderItems.add(orderItem);
         }
         orderItemRepository.saveAll(orderItems);
@@ -115,6 +113,80 @@ public class OrderService {
         Order order = orderRepository.getByIdOrThrow(orderId);
         List<OrderItem> items = orderItemRepository.findByOrderId(orderId);
         return OrderHistoryResponse.from(order, items);
+    }
+
+    /**
+     * Redis 분산 락을 사용한 재고 차감 및 주문 아이템 생성
+     */
+    private OrderItem reduceStockWithLock(Long orderId, Long productId, int quantity) {
+        String lockKey = LOCK_KEY_PREFIX + productId;
+        RLock lock = redissonClient.getLock(lockKey);
+
+        try {
+            boolean acquired = lock.tryLock(5, 10, TimeUnit.SECONDS);
+            if (!acquired) {
+                throw new IllegalStateException("재고 락 획득 실패: productId=" + productId);
+            }
+
+            return executeStockReduction(orderId, productId, quantity);
+
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("락 획득 중 인터럽트 발생", e);
+        } finally {
+            if (lock.isHeldByCurrentThread()) {
+                lock.unlock();
+            }
+        }
+    }
+
+    /**
+     * 재고 차감 트랜잭션 처리 (락 획득 후 실행)
+     */
+    @Transactional
+    private OrderItem executeStockReduction(Long orderId, Long productId, int quantity) {
+        Product product = productRepository.getByIdOrThrow(productId);
+        product.reduceStock(quantity);
+        productRepository.save(product);
+
+        OrderItem orderItem = new OrderItem(product, quantity);
+        orderItem.setOrderId(orderId);
+        return orderItem;
+    }
+
+    /**
+     * Redis 분산 락을 사용한 재고 복구 (보상 트랜잭션)
+     */
+    private void restoreStockWithLock(Long productId, int quantity) {
+        String lockKey = LOCK_KEY_PREFIX + productId;
+        RLock lock = redissonClient.getLock(lockKey);
+
+        try {
+            boolean acquired = lock.tryLock(5, 10, TimeUnit.SECONDS);
+            if (!acquired) {
+                throw new IllegalStateException("재고 복구 락 획득 실패: productId=" + productId);
+            }
+
+            executeStockRestore(productId, quantity);
+
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("락 획득 중 인터럽트 발생", e);
+        } finally {
+            if (lock.isHeldByCurrentThread()) {
+                lock.unlock();
+            }
+        }
+    }
+
+    /**
+     * 재고 복구 트랜잭션 처리 (락 획득 후 실행)
+     */
+    @Transactional
+    private void executeStockRestore(Long productId, int quantity) {
+        Product product = productRepository.getByIdOrThrow(productId);
+        product.restoreStock(quantity);
+        productRepository.save(product);
     }
 
     /**
@@ -197,13 +269,7 @@ public class OrderService {
             // 1. 재고 복구
             List<OrderItem> orderItems = orderItemRepository.findByOrderId(orderId);
             for (OrderItem item : orderItems) {
-                productRepository.executeWithLock(
-                        item.getProductId(),
-                        product -> {
-                            product.restoreStock(item.getQuantity());
-                            return null;
-                        }
-                );
+                restoreStockWithLock(item.getProductId(), item.getQuantity());
             }
 
             // 2. 포인트 복구

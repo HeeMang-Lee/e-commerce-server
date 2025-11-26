@@ -10,16 +10,20 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.redisson.api.RLock;
+import org.redisson.api.RedissonClient;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -44,13 +48,15 @@ class OrderServiceTest {
     private OutboxEventRepository outboxEventRepository;
     @Mock
     private DataPlatformService dataPlatformService;
+    @Mock
+    private RedissonClient redissonClient;
 
     @InjectMocks
     private OrderService orderService;
 
     @Test
     @DisplayName("주문을 생성한다 - 쿠폰/포인트 없음")
-    void createOrder_WithoutCouponAndPoint() {
+    void createOrder_WithoutCouponAndPoint() throws Exception {
         // given
         User user = new User(1L, "테스트", "test@test.com", 10000);
         Product product = new Product(1L, "키보드", "무선", 50000, 10, "전자");
@@ -58,13 +64,15 @@ class OrderServiceTest {
         OrderRequest.OrderItemRequest itemReq = new OrderRequest.OrderItemRequest(1L, 2);
         OrderRequest request = new OrderRequest(1L, Arrays.asList(itemReq), null, null);
 
-        when(userRepository.getByIdOrThrow(1L)).thenReturn(user);
+        // Mock RedissonClient and RLock
+        RLock lock = mock(RLock.class);
+        when(redissonClient.getLock(anyString())).thenReturn(lock);
+        when(lock.tryLock(anyLong(), anyLong(), any(TimeUnit.class))).thenReturn(true);
+        when(lock.isHeldByCurrentThread()).thenReturn(true);
 
-        // executeWithLock 모킹: Function을 받아서 실행
-        when(productRepository.executeWithLock(eq(1L), any())).thenAnswer(invocation -> {
-            var operation = invocation.getArgument(1, java.util.function.Function.class);
-            return operation.apply(product);
-        });
+        when(userRepository.getByIdOrThrow(1L)).thenReturn(user);
+        when(productRepository.getByIdOrThrow(1L)).thenReturn(product);
+        when(productRepository.save(any(Product.class))).thenAnswer(inv -> inv.getArgument(0));
 
         when(orderRepository.save(any(Order.class))).thenAnswer(inv -> {
             Order o = inv.getArgument(0);
@@ -89,6 +97,10 @@ class OrderServiceTest {
         verify(pointHistoryRepository, never()).save(any());
         verify(userCouponRepository, never()).save(any());
         verify(dataPlatformService, never()).sendOrderData(anyString());
+
+        // 락 획득 및 해제 검증
+        verify(lock, times(1)).tryLock(anyLong(), anyLong(), any(TimeUnit.class));
+        verify(lock, times(1)).unlock();
     }
 
     @Test
