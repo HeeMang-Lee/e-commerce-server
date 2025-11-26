@@ -29,6 +29,7 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-data-redis'
     implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.3.0'
     implementation 'org.redisson:redisson-spring-boot-starter:3.25.0'
+    implementation 'org.xerial.snappy:snappy-java:1.1.10.5'
 
     runtimeOnly 'com.mysql:mysql-connector-j'
 
