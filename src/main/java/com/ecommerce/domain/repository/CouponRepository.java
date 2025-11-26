@@ -15,6 +15,11 @@ public interface CouponRepository {
 
     Optional<Coupon> findById(Long id);
 
+    default Coupon getByIdOrThrow(Long id) {
+        return findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("쿠폰을 찾을 수 없습니다: " + id));
+    }
+
     List<Coupon> findAll();
 
     /**

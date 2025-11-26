@@ -7,21 +7,28 @@ import com.ecommerce.domain.entity.UserCoupon;
 import com.ecommerce.domain.repository.CouponRepository;
 import com.ecommerce.domain.repository.UserCouponRepository;
 import lombok.RequiredArgsConstructor;
+import org.redisson.api.RLock;
+import org.redisson.api.RedissonClient;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 @Service
 @RequiredArgsConstructor
 public class CouponService {
 
+    private static final String LOCK_KEY_PREFIX = "ecommerce:lock:coupon:issue:";
+
     private final CouponRepository couponRepository;
     private final UserCouponRepository userCouponRepository;
+    private final RedissonClient redissonClient;
 
     /**
      * 쿠폰을 발급합니다.
-     * Lock을 사용하여 재고 차감과 사용자 쿠폰 생성의 원자성을 보장합니다.
+     * Redis 분산 락을 사용하여 재고 차감과 사용자 쿠폰 생성의 원자성을 보장합니다.
      */
     public UserCouponResponse issueCoupon(CouponIssueRequest request) {
         // 중복 발급 체크
@@ -30,24 +37,46 @@ public class CouponService {
                     throw new IllegalStateException("이미 발급받은 쿠폰입니다");
                 });
 
-        UserCoupon userCoupon = couponRepository.executeWithLock(
+        String lockKey = LOCK_KEY_PREFIX + request.couponId();
+        RLock lock = redissonClient.getLock(lockKey);
+
+        try {
+            boolean acquired = lock.tryLock(5, 10, TimeUnit.SECONDS);
+            if (!acquired) {
+                throw new IllegalStateException("쿠폰 발급 락 획득 실패: couponId=" + request.couponId());
+            }
+
+            UserCoupon userCoupon = executeIssueCoupon(request);
+            return UserCouponResponse.from(userCoupon);
+
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("락 획득 중 인터럽트 발생", e);
+        } finally {
+            if (lock.isHeldByCurrentThread()) {
+                lock.unlock();
+            }
+        }
+    }
+
+    /**
+     * 쿠폰 발급 트랜잭션 처리 (락 획득 후 실행)
+     */
+    @Transactional
+    private UserCoupon executeIssueCoupon(CouponIssueRequest request) {
+        Coupon coupon = couponRepository.getByIdOrThrow(request.couponId());
+        coupon.issue();
+        couponRepository.save(coupon);
+
+        LocalDateTime expiresAt = LocalDateTime.now().plusDays(coupon.getValidPeriodDays());
+        UserCoupon newUserCoupon = new UserCoupon(
+                request.userId(),
                 request.couponId(),
-                coupon -> {
-                    coupon.issue();
-
-                    LocalDateTime expiresAt = LocalDateTime.now().plusDays(coupon.getValidPeriodDays());
-                    UserCoupon newUserCoupon = new UserCoupon(
-                            request.userId(),
-                            request.couponId(),
-                            expiresAt
-                    );
-                    userCouponRepository.save(newUserCoupon);
-
-                    return newUserCoupon;
-                }
+                expiresAt
         );
+        userCouponRepository.save(newUserCoupon);
 
-        return UserCouponResponse.from(userCoupon);
+        return newUserCoupon;
     }
 
     public List<UserCouponResponse> getUserCoupons(Long userId) {
