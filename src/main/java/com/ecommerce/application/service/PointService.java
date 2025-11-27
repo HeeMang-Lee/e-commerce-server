@@ -38,7 +38,7 @@ public class PointService {
         RLock lock = redissonClient.getLock(lockKey);
 
         try {
-            boolean acquired = lock.tryLock(5, 10, TimeUnit.SECONDS);
+            boolean acquired = lock.tryLock(30, 10, TimeUnit.SECONDS);
             if (!acquired) {
                 throw new IllegalStateException("포인트 충전 락 획득 실패: userId=" + request.userId());
             }
@@ -91,7 +91,7 @@ public class PointService {
         RLock lock = redissonClient.getLock(lockKey);
 
         try {
-            boolean acquired = lock.tryLock(5, 10, TimeUnit.SECONDS);
+            boolean acquired = lock.tryLock(30, 10, TimeUnit.SECONDS);
             if (!acquired) {
                 throw new IllegalStateException("포인트 차감 락 획득 실패: userId=" + userId);
             }

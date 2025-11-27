@@ -130,7 +130,7 @@ public class OrderService {
         RLock lock = redissonClient.getLock(lockKey);
 
         try {
-            boolean acquired = lock.tryLock(5, 10, TimeUnit.SECONDS);
+            boolean acquired = lock.tryLock(30, 10, TimeUnit.SECONDS);
             if (!acquired) {
                 throw new IllegalStateException("재고 락 획득 실패: productId=" + productId);
             }
@@ -169,7 +169,7 @@ public class OrderService {
         RLock lock = redissonClient.getLock(lockKey);
 
         try {
-            boolean acquired = lock.tryLock(5, 10, TimeUnit.SECONDS);
+            boolean acquired = lock.tryLock(30, 10, TimeUnit.SECONDS);
             if (!acquired) {
                 throw new IllegalStateException("재고 복구 락 획득 실패: productId=" + productId);
             }

@@ -38,7 +38,7 @@ public class CouponService {
         RLock lock = redissonClient.getLock(lockKey);
 
         try {
-            boolean acquired = lock.tryLock(5, 10, TimeUnit.SECONDS);
+            boolean acquired = lock.tryLock(30, 10, TimeUnit.SECONDS);
             if (!acquired) {
                 throw new IllegalStateException("쿠폰 발급 락 획득 실패: couponId=" + request.couponId());
             }
@@ -91,7 +91,7 @@ public class CouponService {
         RLock lock = redissonClient.getLock(lockKey);
 
         try {
-            boolean acquired = lock.tryLock(5, 10, TimeUnit.SECONDS);
+            boolean acquired = lock.tryLock(30, 10, TimeUnit.SECONDS);
             if (!acquired) {
                 throw new IllegalStateException("쿠폰 사용 락 획득 실패: userCouponId=" + userCouponId);
             }
