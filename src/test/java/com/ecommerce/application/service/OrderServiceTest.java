@@ -138,7 +138,7 @@ class OrderServiceTest {
 
     @Test
     @DisplayName("결제를 처리한다 - 포인트 사용")
-    void processPayment_WithPoint() {
+    void processPayment_WithPoint() throws Exception {
         // given
         User user = new User(1L, "테스트", "test@test.com", 10000);
         Product product = new Product(1L, "키보드", "무선", 50000, 8, "전자");
@@ -154,6 +154,12 @@ class OrderServiceTest {
         OrderPayment payment = new OrderPayment(1L, 100000, 0, 5000, null);
 
         PaymentRequest request = new PaymentRequest(null, 5000);
+
+        // Mock RedissonClient and RLock
+        RLock lock = mock(RLock.class);
+        when(redissonClient.getLock(anyString())).thenReturn(lock);
+        when(lock.tryLock(anyLong(), anyLong(), any(TimeUnit.class))).thenReturn(true);
+        when(lock.isHeldByCurrentThread()).thenReturn(true);
 
         when(orderRepository.getByIdOrThrow(1L)).thenReturn(order);
         when(orderPaymentRepository.getByOrderIdOrThrow(1L)).thenReturn(payment);

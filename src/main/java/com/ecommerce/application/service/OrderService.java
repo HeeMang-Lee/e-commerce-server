@@ -23,7 +23,8 @@ public class OrderService {
 
     private static final String EVENT_TYPE_ORDER_COMPLETED = "ORDER_COMPLETED";
     private static final String POINT_DESCRIPTION_ORDER_PAYMENT = "주문 결제";
-    private static final String LOCK_KEY_PREFIX = "lock:stock:";
+    private static final String LOCK_KEY_PREFIX_STOCK = "lock:stock:";
+    private static final String LOCK_KEY_PREFIX_PAYMENT = "lock:payment:";
 
     private final UserRepository userRepository;
     private final ProductRepository productRepository;
@@ -126,7 +127,7 @@ public class OrderService {
      * Redis 분산 락을 사용한 재고 차감 및 주문 아이템 생성
      */
     private OrderItem reduceStockWithLock(Long orderId, Long productId, int quantity) {
-        String lockKey = LOCK_KEY_PREFIX + productId;
+        String lockKey = LOCK_KEY_PREFIX_STOCK + productId;
         RLock lock = redissonClient.getLock(lockKey);
 
         try {
@@ -165,7 +166,7 @@ public class OrderService {
      * Redis 분산 락을 사용한 재고 복구 (보상 트랜잭션)
      */
     private void restoreStockWithLock(Long productId, int quantity) {
-        String lockKey = LOCK_KEY_PREFIX + productId;
+        String lockKey = LOCK_KEY_PREFIX_STOCK + productId;
         RLock lock = redissonClient.getLock(lockKey);
 
         try {
@@ -198,10 +199,37 @@ public class OrderService {
 
     /**
      * 결제를 처리합니다.
+     * Redis 분산 락으로 동일 주문에 대한 중복 결제를 방지합니다.
      * 포인트/쿠폰 사용, 결제 완료, 판매 이력 기록, 외부 데이터 전송을 수행하며
      * 실패 시 재고, 포인트, 쿠폰을 복구합니다.
      */
     public PaymentResponse processPayment(Long orderId, PaymentRequest request) {
+        String lockKey = LOCK_KEY_PREFIX_PAYMENT + orderId;
+        RLock lock = redissonClient.getLock(lockKey);
+
+        try {
+            boolean acquired = lock.tryLock(30, 10, TimeUnit.SECONDS);
+            if (!acquired) {
+                throw new IllegalStateException("결제 처리 락 획득 실패: orderId=" + orderId);
+            }
+
+            return executePayment(orderId, request);
+
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("락 획득 중 인터럽트 발생", e);
+        } finally {
+            if (lock.isHeldByCurrentThread()) {
+                lock.unlock();
+            }
+        }
+    }
+
+    /**
+     * 결제 처리 트랜잭션 (락 획득 후 실행)
+     */
+    @Transactional
+    public PaymentResponse executePayment(Long orderId, PaymentRequest request) {
         Order order = orderRepository.getByIdOrThrow(orderId);
         OrderPayment payment = orderPaymentRepository.getByOrderIdOrThrow(orderId);
 

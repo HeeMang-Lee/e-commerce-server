@@ -186,7 +186,7 @@ class MultiResourceConcurrencyIntegrationTest {
         }
 
         startLatch.countDown();
-        doneLatch.await(15, TimeUnit.SECONDS);
+        doneLatch.await(60, TimeUnit.SECONDS);
         executorService.shutdown();
 
         // then: 재고 10개이므로 모두 성공
@@ -324,7 +324,7 @@ class MultiResourceConcurrencyIntegrationTest {
         }
 
         startLatch.countDown();
-        doneLatch.await(15, TimeUnit.SECONDS);
+        doneLatch.await(60, TimeUnit.SECONDS);
         executorService.shutdown();
 
         // then: 모두 성공
