@@ -44,6 +44,8 @@ public class OrderService {
 
         Order order = new Order(user.getId());
         orderRepository.save(order);
+        order.assignOrderNumber();
+        orderRepository.save(order);
 
         List<OrderRequest.OrderItemRequest> sortedItems = request.items().stream()
                 .sorted((a, b) -> a.productId().compareTo(b.productId()))

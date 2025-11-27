@@ -26,47 +26,62 @@
 
 | 방식 | 특징 | 선택 여부 |
 |------|------|----------|
-| **Lettuce SETNX** | Spin Lock 방식, 락을 얻을 때까지 반복 요청 | ❌ CPU와 Redis 부하 발생 |
-| **Redisson** | Pub/Sub 방식, 락 해제 시 자동 알림 | ✅ 선택 |
+| **Lettuce SETNX (Spin Lock)** | 단순한 SET NX EX 명령, 락 미획득 시 대기 후 재시도 | ⚠️ 구현 복잡도 높음 |
+| **Redisson RLock (Spin Lock)** | Spin Lock 기반, 락 자동 갱신(watchdog) 제공 | ✅ 선택 |
+| **Redisson Pub/Sub Lock** | Pub/Sub 방식, 락 해제 시 메시지 알림 | ❌ CPU/네트워크 부하 높음 |
 | **MySQL Named Lock** | 별도 Redis 인프라 불필요 | ❌ DB 커넥션 점유 |
 
-#### Spin Lock vs Pub/Sub 방식 비교
+#### Spin Lock vs Pub/Sub Lock 성능 분석
 
-**Spin Lock의 동작:**
+**일반적인 오해:**
+> "Pub/Sub Lock이 Spin Lock보다 성능이 좋다"
+
+이 주장은 **"락 경합이 장시간 지속될 때"**라는 전제를 숨기고 있습니다. 하지만 **실제 서비스에서 락 경합은 0.1%도 안 일어나야 정상**입니다.
+
+**Spin Lock의 동작 (Redisson RLock):**
 ```java
-// Lettuce SETNX 기반 Spin Lock
-while (!redisTemplate.opsForValue().setIfAbsent(lockKey, "1", 10, SECONDS)) {
-    Thread.sleep(100); // 0.1초 대기 후 재시도
+RLock lock = redissonClient.getLock("lock:product:1");
+try {
+    boolean acquired = lock.tryLock(30, 10, TimeUnit.SECONDS);
+    if (!acquired) {
+        throw new IllegalStateException("락 획득 실패");
+    }
+    // 비즈니스 로직 (단순한 SET NX EX, GET, DEL 명령)
+} finally {
+    if (lock.isHeldByCurrentThread()) {
+        lock.unlock();
+    }
 }
-// 100개 스레드 × 10회/초 = 초당 1,000회 Redis 요청
 ```
 
 **Pub/Sub Lock의 동작:**
 ```java
-// Redisson Pub/Sub
-RLock lock = redissonClient.getLock("lock:product:1");
-lock.lock(10, TimeUnit.SECONDS);
-
-// 락 대기 스레드는 Redis Channel 구독
-// 락 해제 시 Redis가 메시지 발행 → 대기 스레드가 락 획득 시도
-// 반복 폴링 없음
+// Lua Script + Publish/Subscribe
+// 복잡한 명령 수행 + 메시지 발행으로 네트워크 트래픽 증가
 ```
 
-**성능 비교:**
-- **락 경합이 많을 때** (여러 스레드가 동시에 락 대기): Pub/Sub이 압도적으로 유리
-  - Spin Lock: 대기 스레드가 지속적으로 Redis 요청 → 네트워크/CPU 낭비
-  - Pub/Sub: 대기 스레드는 메시지 수신 대기 → Redis 부하 최소화
+**실제 성능 비교:**
 
-- **락 경합이 거의 없을 때**: Spin Lock이 약간 빠를 수 있음
-  - Pub/Sub은 Lua Script 실행 + Publish 오버헤드
-  - 하지만 분산 락을 사용하는 이유는 "혹시 모를 동시 접근"을 막기 위한 것
-  - **핵심은 애플리케이션 설계를 경합이 적게 만드는 것**
+| 상황 | Spin Lock | Pub/Sub Lock | 우위 |
+|------|-----------|--------------|------|
+| **락 경합 거의 없음** (일반적 상황) | 단순한 Redis 명령 (SET NX EX) | Lua Script + Pub/Sub 오버헤드 | **Spin Lock 압도적 우위** |
+| **락 경합 빈번 발생** (비정상적 상황) | 반복 요청으로 부하 증가 | 메시지 알림으로 부하 감소(?) | ⚠️ 두 방식 모두 문제 |
 
-**Redisson 선택 이유:**
-- 이커머스 특성상 쿠폰 발급, 재고 차감 등에서 순간적인 높은 경합 가능
-- Pub/Sub 방식으로 높은 경합 상황에서도 안정적 처리
-- 락 자동 갱신(watchdog) 기능 제공
-- tryLock, lock 등 다양한 API 제공
+**Redisson 공식 문서의 경고:**
+> "짧은 시간에 수천 개 이상의 Lock 획득/반환 시 Pub/Sub 방식은 **네트워크 대역폭 한계 + Redis CPU 과부하** 발생 가능. 메시지가 클러스터의 모든 노드(혹은 모든 커넥션)로 발송되는 Pub/Sub 특성에서 기인."
+>
+> \- [Redisson Documentation - Spin Lock](https://redisson.org/docs/data-and-services/locks-and-synchronizers/#spin-lock)
+
+**실제 사례:**
+- 지난 팀에서 Spin Lock으로 변경 후 **Redis 부하 90% 감소**
+- 지속적으로 Scale Up하던 Redis 인스턴스를 **Scale Down** 가능
+
+**Redisson RLock 선택 이유:**
+1. **99.9%의 경우 락 경합이 거의 없음** → Spin Lock이 압도적으로 유리
+2. 락 경합이 빈번하면 이미 사용자 경험 최악 → 아키텍처 재설계 필요 (대기열, FIFO Queue 등)
+3. 단순한 Redis 명령(SET NX EX, GET, DEL)으로 최소 부하
+4. 락 자동 갱신(watchdog) 기능 제공
+5. tryLock, lock 등 다양한 API 제공
 
 ```java
 // Redisson 사용 예시
@@ -826,4 +841,5 @@ DB 부하: 약 50배 감소
 - [Redisson 분산락을 이용한 동시성 제어](https://helloworld.kurly.com/blog/distributed-redisson-lock/)
 - [Redis 분산 락 사용 시 주의사항](https://mangkyu.tistory.com/411)
 - [Cache Stampede 현상과 대응 방안](https://mangkyu.tistory.com/371)
+- [Spin Lock이 Pub/Sub Lock보다 99.9% 빠른 이유](https://blog.naver.com/kwon37xi/223775157674)
 - 프로젝트 내부 문서: `CONCURRENCY_PROBLEM_ANALYSIS.md`

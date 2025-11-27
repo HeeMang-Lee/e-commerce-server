@@ -6,9 +6,6 @@ import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
-
 /**
  * 주문 Entity
  * ERD 설계에 따라 단순화된 주문 정보만 관리합니다.
@@ -33,19 +30,14 @@ public class Order extends BaseTimeEntity {
         }
 
         this.userId = userId;
-        this.orderNumber = generateOrderNumber();
+        this.orderNumber = "ORD-TEMP-" + System.nanoTime();
         initializeTimestamps();
     }
 
-    /**
-     * 주문 번호를 생성합니다.
-     * 형식: ORD-{yyyyMMddHHmmss}-{나노초 끝 6자리}
-     */
-    private String generateOrderNumber() {
-        LocalDateTime now = LocalDateTime.now();
-        String timestamp = now.format(DateTimeFormatter.ofPattern("yyyyMMddHHmmss"));
-        int nanosValue = now.getNano() % 1000000;
-        String nanos = ("000000" + nanosValue).substring(String.valueOf(nanosValue).length());
-        return "ORD-" + timestamp + "-" + nanos;
+    public void assignOrderNumber() {
+        if (this.getId() == null) {
+            throw new IllegalStateException("주문 ID가 필요합니다");
+        }
+        this.orderNumber = "ORD-" + String.format("%010d", this.getId());
     }
 }
