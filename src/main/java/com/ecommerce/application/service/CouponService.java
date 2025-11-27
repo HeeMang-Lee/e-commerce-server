@@ -29,15 +29,11 @@ public class CouponService {
 
     /**
      * 쿠폰을 발급합니다.
-     * Redis 분산 락을 사용하여 재고 차감과 사용자 쿠폰 생성의 원자성을 보장합니다.
+     * Redis 분산 락을 사용하여 쿠폰 재고 차감과 사용자 쿠폰 생성의 원자성을 보장합니다.
+     * 락은 couponId 기준으로 획득하여 쿠폰 재고를 보호합니다.
+     * 중복 발급은 트랜잭션 내에서 DB 조회로 확인합니다.
      */
     public UserCouponResponse issueCoupon(CouponIssueRequest request) {
-        // 중복 발급 체크
-        userCouponRepository.findByUserIdAndCouponId(request.userId(), request.couponId())
-                .ifPresent(existingCoupon -> {
-                    throw new IllegalStateException("이미 발급받은 쿠폰입니다");
-                });
-
         String lockKey = LOCK_KEY_PREFIX_COUPON + request.couponId();
         RLock lock = redissonClient.getLock(lockKey);
 
@@ -65,6 +61,12 @@ public class CouponService {
      */
     @Transactional
     private UserCoupon executeIssueCoupon(CouponIssueRequest request) {
+        // 중복 발급 체크 (락 획득 후)
+        userCouponRepository.findByUserIdAndCouponId(request.userId(), request.couponId())
+                .ifPresent(existingCoupon -> {
+                    throw new IllegalStateException("이미 발급받은 쿠폰입니다");
+                });
+
         Coupon coupon = couponRepository.getByIdOrThrow(request.couponId());
         coupon.issue();
         couponRepository.save(coupon);
