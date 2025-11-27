@@ -39,17 +39,12 @@ public class OrderService {
     private final PointService pointService;
     private final CouponService couponService;
 
-    /**
-     * 주문을 생성합니다. 재고를 차감하고 PENDING 상태의 결제 정보를 생성합니다.
-     * 실제 결제 처리는 processPayment에서 수행됩니다.
-     */
     public OrderResponse createOrder(OrderRequest request) {
         User user = userRepository.getByIdOrThrow(request.userId());
 
         Order order = new Order(user.getId());
         orderRepository.save(order);
 
-        // 데드락 방지를 위해 상품 ID를 정렬하여 항상 같은 순서로 락을 획득
         List<OrderRequest.OrderItemRequest> sortedItems = request.items().stream()
                 .sorted((a, b) -> a.productId().compareTo(b.productId()))
                 .toList();
@@ -68,7 +63,6 @@ public class OrderService {
         int discountAmount = 0;
         if (request.userCouponId() != null) {
             UserCoupon userCoupon = userCouponRepository.getByIdOrThrow(request.userCouponId());
-            // TODO: 쿠폰 타입에 따라 할인 금액 계산
             discountAmount = 0;
         }
 
@@ -103,7 +97,6 @@ public class OrderService {
                 .map(Order::getId)
                 .toList();
 
-        // IN 절로 모든 주문 아이템을 한 번에 조회 (N+1 문제 해결)
         List<OrderItem> allOrderItems = orderItemRepository.findByOrderIdIn(orderIds);
 
         var orderItemsMap = allOrderItems.stream()
@@ -123,9 +116,6 @@ public class OrderService {
         return OrderHistoryResponse.from(order, items);
     }
 
-    /**
-     * Redis 분산 락을 사용한 재고 차감 및 주문 아이템 생성
-     */
     private OrderItem reduceStockWithLock(Long orderId, Long productId, int quantity) {
         String lockKey = LOCK_KEY_PREFIX_STOCK + productId;
         RLock lock = redissonClient.getLock(lockKey);
@@ -148,9 +138,6 @@ public class OrderService {
         }
     }
 
-    /**
-     * 재고 차감 트랜잭션 처리 (락 획득 후 실행)
-     */
     @Transactional
     public OrderItem executeStockReduction(Long orderId, Long productId, int quantity) {
         Product product = productRepository.getByIdOrThrow(productId);
@@ -162,9 +149,6 @@ public class OrderService {
         return orderItem;
     }
 
-    /**
-     * Redis 분산 락을 사용한 재고 복구 (보상 트랜잭션)
-     */
     private void restoreStockWithLock(Long productId, int quantity) {
         String lockKey = LOCK_KEY_PREFIX_STOCK + productId;
         RLock lock = redissonClient.getLock(lockKey);
@@ -187,9 +171,6 @@ public class OrderService {
         }
     }
 
-    /**
-     * 재고 복구 트랜잭션 처리 (락 획득 후 실행)
-     */
     @Transactional
     public void executeStockRestore(Long productId, int quantity) {
         Product product = productRepository.getByIdOrThrow(productId);
@@ -197,12 +178,6 @@ public class OrderService {
         productRepository.save(product);
     }
 
-    /**
-     * 결제를 처리합니다.
-     * Redis 분산 락으로 동일 주문에 대한 중복 결제를 방지합니다.
-     * 포인트/쿠폰 사용, 결제 완료, 판매 이력 기록, 외부 데이터 전송을 수행하며
-     * 실패 시 재고, 포인트, 쿠폰을 복구합니다.
-     */
     public PaymentResponse processPayment(Long orderId, PaymentRequest request) {
         String lockKey = LOCK_KEY_PREFIX_PAYMENT + orderId;
         RLock lock = redissonClient.getLock(lockKey);
@@ -225,9 +200,6 @@ public class OrderService {
         }
     }
 
-    /**
-     * 결제 처리 트랜잭션 (락 획득 후 실행)
-     */
     @Transactional
     public PaymentResponse executePayment(Long orderId, PaymentRequest request) {
         Order order = orderRepository.getByIdOrThrow(orderId);
@@ -242,13 +214,11 @@ public class OrderService {
         boolean couponUsed = false;
 
         try {
-            // 포인트 차감 (PointService 호출 - 락 포함)
             if (usedPoint > 0) {
                 pointService.deductPoint(order.getUserId(), usedPoint, POINT_DESCRIPTION_ORDER_PAYMENT, orderId);
                 pointDeducted = true;
             }
 
-            // 쿠폰 사용 (CouponService 호출 - 락 포함)
             if (payment.getUserCouponId() != null) {
                 couponService.useCoupon(payment.getUserCouponId());
                 couponUsed = true;
@@ -263,7 +233,6 @@ public class OrderService {
                     ",\"totalAmount\":" + payment.getOriginalAmount() +
                     ",\"finalAmount\":" + payment.getFinalAmount() + "}";
 
-            // 외부 전송 실패 시 아웃박스 패턴으로 재시도 보장
             try {
                 boolean success = dataPlatformService.sendOrderData(orderData);
                 if (success) {
@@ -290,19 +259,16 @@ public class OrderService {
         } catch (Exception e) {
             log.error("결제 처리 중 오류 발생, 보상 트랜잭션 시작: orderId={}", orderId, e);
 
-            // 1. 재고 복구
             List<OrderItem> orderItems = orderItemRepository.findByOrderId(orderId);
             for (OrderItem item : orderItems) {
                 restoreStockWithLock(item.getProductId(), item.getQuantity());
             }
 
-            // 2. 포인트 복구 (PointService 호출 - 락 포함)
             if (pointDeducted) {
                 pointService.chargePoint(new PointChargeRequest(order.getUserId(), usedPoint));
                 log.info("포인트 복구 완료: userId={}, amount={}", order.getUserId(), usedPoint);
             }
 
-            // 3. 쿠폰 복구 (직접 처리 - 복구는 단순하므로)
             if (couponUsed && payment.getUserCouponId() != null) {
                 UserCoupon userCoupon = userCouponRepository.getByIdOrThrow(payment.getUserCouponId());
                 userCoupon.restore();
