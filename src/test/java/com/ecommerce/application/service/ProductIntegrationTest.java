@@ -1,5 +1,6 @@
 package com.ecommerce.application.service;
 
+import com.ecommerce.application.dto.ProductListResponse;
 import com.ecommerce.application.dto.ProductResponse;
 import com.ecommerce.config.TestcontainersConfig;
 import com.ecommerce.domain.entity.Order;
@@ -68,7 +69,7 @@ class ProductIntegrationTest {
         productRepository.save(product3);
 
         // when
-        List<ProductResponse> products = productService.getProducts();
+        List<ProductListResponse> products = productService.getProducts();
 
         // then
         assertThat(products).hasSize(3);

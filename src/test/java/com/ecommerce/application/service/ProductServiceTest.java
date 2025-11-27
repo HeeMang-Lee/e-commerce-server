@@ -1,5 +1,6 @@
 package com.ecommerce.application.service;
 
+import com.ecommerce.application.dto.ProductListResponse;
 import com.ecommerce.application.dto.ProductResponse;
 import com.ecommerce.domain.entity.Product;
 import com.ecommerce.domain.repository.PopularProductRepository;
@@ -43,7 +44,7 @@ class ProductServiceTest {
         when(productRepository.findAll()).thenReturn(Arrays.asList(product1, product2));
 
         // when
-        List<ProductResponse> products = productService.getProducts();
+        List<ProductListResponse> products = productService.getProducts();
 
         // then
         assertThat(products).hasSize(2);

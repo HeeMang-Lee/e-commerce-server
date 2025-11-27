@@ -1,5 +1,6 @@
 package com.ecommerce.application.service;
 
+import com.ecommerce.application.dto.ProductListResponse;
 import com.ecommerce.application.dto.ProductResponse;
 import com.ecommerce.config.RedisCacheConfig;
 import com.ecommerce.domain.entity.Product;
@@ -24,16 +25,29 @@ public class ProductService {
 
     /**
      * 모든 상품 목록을 조회합니다.
+     *
+     * Look Aside 캐싱 전략:
+     * - 재고 숫자 대신 상태(AVAILABLE/LOW_STOCK/SOLD_OUT)만 반영
+     * - TTL 5분으로 긴 캐싱 가능 (정확한 재고는 상세 조회 참조)
+     * - sync=true로 Cache Stampede 방지
      */
-    public List<ProductResponse> getProducts() {
+    @Cacheable(value = RedisCacheConfig.PRODUCT_LIST_CACHE, key = "'all'", sync = true)
+    public List<ProductListResponse> getProducts() {
         return productRepository.findAll().stream()
-                .map(ProductResponse::from)
+                .map(ProductListResponse::from)
                 .toList();
     }
 
     /**
      * 상품을 단건 조회합니다.
+     *
+     * Look Aside 캐싱 전략:
+     * - 정확한 재고 포함 (주문 전 확인용)
+     * - TTL 30초로 재고 신선도 유지
+     * - 실제 주문 시 분산 락으로 재고 정확성 보장
+     * - sync=true로 Cache Stampede 방지
      */
+    @Cacheable(value = RedisCacheConfig.PRODUCT_CACHE, key = "#productId", sync = true)
     public ProductResponse getProduct(Long productId) {
         Product product = productRepository.getByIdOrThrow(productId);
         return ProductResponse.from(product);

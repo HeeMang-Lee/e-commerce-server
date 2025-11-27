@@ -1,5 +1,6 @@
 package com.ecommerce.config;
 
+import com.ecommerce.application.dto.ProductListResponse;
 import com.ecommerce.application.dto.ProductResponse;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -30,11 +31,21 @@ import java.util.List;
 public class RedisCacheConfig {
 
     public static final String POPULAR_PRODUCTS_CACHE = "popularProducts";
+    public static final String PRODUCT_LIST_CACHE = "productList";
+    public static final String PRODUCT_CACHE = "product";
 
     @Bean
     public CacheManager cacheManager(RedisConnectionFactory connectionFactory) {
         ObjectMapper objectMapper = new ObjectMapper();
         objectMapper.registerModule(new JavaTimeModule());
+
+        // 상품 목록용 Serializer (List<ProductListResponse>)
+        SnappyRedisSerializer<List<ProductListResponse>> productListSerializer =
+                new SnappyRedisSerializer<>(objectMapper, new TypeReference<>() {});
+
+        // 상품 상세용 Serializer (ProductResponse)
+        SnappyRedisSerializer<ProductResponse> productSerializer =
+                new SnappyRedisSerializer<>(objectMapper, new TypeReference<>() {});
 
         // 인기 상품용 Serializer (List<ProductResponse>)
         SnappyRedisSerializer<List<ProductResponse>> popularProductsSerializer =
@@ -45,6 +56,42 @@ public class RedisCacheConfig {
                         RedisSerializationContext.SerializationPair.fromSerializer(new StringRedisSerializer())
                 )
                 .entryTtl(Duration.ofMinutes(5));
+
+        /**
+         * 상품 목록 캐시 설정 (Look Aside 패턴)
+         *
+         * TTL: 5분
+         * - 재고 숫자 대신 상태(AVAILABLE/LOW_STOCK/SOLD_OUT)만 표시
+         * - 재고 10개 기준은 느슨하게 관리 가능 (정확한 재고는 상세 조회 참조)
+         * - 전체 스캔 쿼리라 DB 비용 중간
+         * - 5분 TTL로 재고 상태 변화 적절히 반영
+         */
+        RedisCacheConfiguration productListConfig = RedisCacheConfiguration.defaultCacheConfig()
+                .serializeKeysWith(
+                        RedisSerializationContext.SerializationPair.fromSerializer(new StringRedisSerializer())
+                )
+                .serializeValuesWith(
+                        RedisSerializationContext.SerializationPair.fromSerializer(productListSerializer)
+                )
+                .entryTtl(Duration.ofMinutes(5));
+
+        /**
+         * 상품 상세 캐시 설정 (Look Aside 패턴)
+         *
+         * TTL: 30초
+         * - 정확한 재고 표시 필요 (주문 전 확인용)
+         * - 조회 빈도 매우 높음 (상품 상세 페이지)
+         * - 30초 지연은 UX에 큰 영향 없음 (실제 주문 시 재확인)
+         * - 주문 시점에 분산 락으로 재고 정확성 보장
+         */
+        RedisCacheConfiguration productConfig = RedisCacheConfiguration.defaultCacheConfig()
+                .serializeKeysWith(
+                        RedisSerializationContext.SerializationPair.fromSerializer(new StringRedisSerializer())
+                )
+                .serializeValuesWith(
+                        RedisSerializationContext.SerializationPair.fromSerializer(productSerializer)
+                )
+                .entryTtl(Duration.ofSeconds(30));
 
         /**
          * 인기 상품 캐시 설정 (Look Aside 패턴)
@@ -74,6 +121,8 @@ public class RedisCacheConfig {
 
         return RedisCacheManager.builder(connectionFactory)
                 .cacheDefaults(defaultConfig)
+                .withCacheConfiguration(PRODUCT_LIST_CACHE, productListConfig)
+                .withCacheConfiguration(PRODUCT_CACHE, productConfig)
                 .withCacheConfiguration(POPULAR_PRODUCTS_CACHE, popularProductsConfig)
                 .build();
     }

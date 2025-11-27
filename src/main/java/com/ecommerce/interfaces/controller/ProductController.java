@@ -1,5 +1,6 @@
 package com.ecommerce.interfaces.controller;
 
+import com.ecommerce.application.dto.ProductListResponse;
 import com.ecommerce.application.dto.ProductResponse;
 import com.ecommerce.application.service.ProductService;
 import jakarta.validation.constraints.Positive;
@@ -18,7 +19,7 @@ public class ProductController {
     private final ProductService productService;
 
     @GetMapping
-    public List<ProductResponse> getProducts() {
+    public List<ProductListResponse> getProducts() {
         return productService.getProducts();
     }
 

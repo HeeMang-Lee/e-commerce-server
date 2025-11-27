@@ -1,7 +1,9 @@
 package com.ecommerce.interfaces.controller;
 
+import com.ecommerce.application.dto.ProductListResponse;
 import com.ecommerce.application.dto.ProductResponse;
 import com.ecommerce.application.service.ProductService;
+import com.ecommerce.domain.entity.ProductStockStatus;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -29,8 +31,8 @@ class ProductControllerTest {
     @DisplayName("상품 목록을 조회한다")
     void getProducts() throws Exception {
         // given
-        ProductResponse product1 = new ProductResponse(1L, "키보드", "무선", 50000, 10);
-        ProductResponse product2 = new ProductResponse(2L, "마우스", "유선", 30000, 20);
+        ProductListResponse product1 = new ProductListResponse(1L, "키보드", "무선", 50000, ProductStockStatus.AVAILABLE);
+        ProductListResponse product2 = new ProductListResponse(2L, "마우스", "유선", 30000, ProductStockStatus.AVAILABLE);
         when(productService.getProducts()).thenReturn(Arrays.asList(product1, product2));
 
         // when & then
