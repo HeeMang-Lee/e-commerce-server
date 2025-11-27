@@ -12,6 +12,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.cache.CacheManager;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 
@@ -40,8 +41,16 @@ class ProductIntegrationTest {
     @Autowired
     private ProductService productService;
 
+    @Autowired
+    private CacheManager cacheManager;
+
     @AfterEach
     void tearDown() {
+        // Redis 캐시 클리어
+        if (cacheManager.getCache("popularProducts") != null) {
+            cacheManager.getCache("popularProducts").clear();
+        }
+
         popularProductRepository.deleteAll();
         productRepository.deleteAll();
     }

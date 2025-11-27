@@ -50,6 +50,10 @@ class OrderServiceTest {
     private DataPlatformService dataPlatformService;
     @Mock
     private RedissonClient redissonClient;
+    @Mock
+    private PointService pointService;
+    @Mock
+    private CouponService couponService;
 
     @InjectMocks
     private OrderService orderService;
@@ -152,12 +156,13 @@ class OrderServiceTest {
         PaymentRequest request = new PaymentRequest(null, 5000);
 
         when(orderRepository.getByIdOrThrow(1L)).thenReturn(order);
-        when(userRepository.getByIdOrThrow(1L)).thenReturn(user);
         when(orderPaymentRepository.getByOrderIdOrThrow(1L)).thenReturn(payment);
         when(orderPaymentRepository.save(any(OrderPayment.class))).thenAnswer(inv -> inv.getArgument(0));
-        when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
-        when(pointHistoryRepository.save(any(PointHistory.class))).thenAnswer(inv -> inv.getArgument(0));
         when(dataPlatformService.sendOrderData(anyString())).thenReturn(true);
+
+        // PointService Mock 설정
+        when(pointService.deductPoint(eq(1L), eq(5000), anyString(), eq(1L)))
+                .thenReturn(new PointResponse(1L, 5000));
 
         // when
         PaymentResponse response = orderService.processPayment(1L, request);
@@ -166,9 +171,8 @@ class OrderServiceTest {
         assertThat(response.orderId()).isEqualTo(1L);
         assertThat(response.usedPoint()).isEqualTo(5000);
         assertThat(response.paymentStatus()).isEqualTo("COMPLETED");
-        assertThat(user.getPointBalance()).isEqualTo(5000); // 10000 - 5000
 
-        verify(pointHistoryRepository, times(1)).save(any());
+        verify(pointService, times(1)).deductPoint(eq(1L), eq(5000), anyString(), eq(1L));
         verify(dataPlatformService, times(1)).sendOrderData(anyString());
     }
 }
