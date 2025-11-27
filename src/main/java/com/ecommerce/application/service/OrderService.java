@@ -48,8 +48,13 @@ public class OrderService {
         Order order = new Order(user.getId());
         orderRepository.save(order);
 
+        // 데드락 방지를 위해 상품 ID를 정렬하여 항상 같은 순서로 락을 획득
+        List<OrderRequest.OrderItemRequest> sortedItems = request.items().stream()
+                .sorted((a, b) -> a.productId().compareTo(b.productId()))
+                .toList();
+
         List<OrderItem> orderItems = new ArrayList<>();
-        for (OrderRequest.OrderItemRequest itemReq : request.items()) {
+        for (OrderRequest.OrderItemRequest itemReq : sortedItems) {
             OrderItem orderItem = reduceStockWithLock(order.getId(), itemReq.productId(), itemReq.quantity());
             orderItems.add(orderItem);
         }
