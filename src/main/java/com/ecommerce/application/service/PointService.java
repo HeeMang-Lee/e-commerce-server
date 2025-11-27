@@ -59,7 +59,7 @@ public class PointService {
      * 포인트 충전 트랜잭션 처리 (락 획득 후 실행)
      */
     @Transactional
-    private PointResponse executeChargePoint(PointChargeRequest request) {
+    public PointResponse executeChargePoint(PointChargeRequest request) {
         User user = userRepository.getByIdOrThrow(request.userId());
 
         user.charge(request.amount());
@@ -112,7 +112,7 @@ public class PointService {
      * 포인트 차감 트랜잭션 처리 (락 획득 후 실행)
      */
     @Transactional
-    private PointResponse executeDeductPoint(Long userId, int amount, String description, Long orderId) {
+    public PointResponse executeDeductPoint(Long userId, int amount, String description, Long orderId) {
         User user = userRepository.getByIdOrThrow(userId);
 
         user.deduct(amount);

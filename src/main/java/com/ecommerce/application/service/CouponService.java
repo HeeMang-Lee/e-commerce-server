@@ -60,7 +60,7 @@ public class CouponService {
      * 쿠폰 발급 트랜잭션 처리 (락 획득 후 실행)
      */
     @Transactional
-    private UserCoupon executeIssueCoupon(CouponIssueRequest request) {
+    public UserCoupon executeIssueCoupon(CouponIssueRequest request) {
         // 중복 발급 체크 (락 획득 후)
         userCouponRepository.findByUserIdAndCouponId(request.userId(), request.couponId())
                 .ifPresent(existingCoupon -> {
@@ -113,7 +113,7 @@ public class CouponService {
      * 쿠폰 사용 트랜잭션 처리 (락 획득 후 실행)
      */
     @Transactional
-    private UserCoupon executeUseCoupon(Long userCouponId) {
+    public UserCoupon executeUseCoupon(Long userCouponId) {
         UserCoupon userCoupon = userCouponRepository.getByIdOrThrow(userCouponId);
         userCoupon.use();
         userCouponRepository.save(userCoupon);

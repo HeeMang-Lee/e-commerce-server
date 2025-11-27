@@ -103,8 +103,8 @@ class PointConcurrencyIntegrationTest {
     }
 
     @Test
-    @DisplayName("100개 스레드가 동시에 같은 사용자의 포인트를 500원씩 충전하면 낙관적 락으로 인해 많은 충돌이 발생한다")
-    void chargePoint_HighConcurrency_ManyConflicts() throws InterruptedException {
+    @DisplayName("100개 스레드가 동시에 같은 사용자의 포인트를 500원씩 충전하면 분산 락으로 인해 모두 성공한다")
+    void chargePoint_HighConcurrency_AllSuccess() throws InterruptedException {
         // given
         User user = new User(null, "테스트", "test@test.com", 0);
         final User savedUser = userRepository.save(user);
@@ -138,24 +138,18 @@ class PointConcurrencyIntegrationTest {
         }
 
         startLatch.countDown();
-        doneLatch.await(10, TimeUnit.SECONDS);
+        doneLatch.await(15, TimeUnit.SECONDS);
         executorService.shutdown();
 
         // then
         User resultUser = userRepository.findById(savedUser.getId()).orElseThrow();
 
-        // 성공한 횟수만큼 포인트가 충전되어야 함
-        int expectedBalance = successCount.get() * 500;
-        assertThat(resultUser.getPointBalance()).isEqualTo(expectedBalance);
+        // 분산 락을 사용하므로 모든 충전이 성공해야 함
+        assertThat(successCount.get()).isEqualTo(threadCount);
+        assertThat(failCount.get()).isEqualTo(0);
 
-        // 최소 1개 이상은 성공해야 함
-        assertThat(successCount.get()).isGreaterThan(0);
-
-        // 충돌이 발생했어야 함 (100개가 모두 성공할 수 없음)
-        assertThat(failCount.get()).isGreaterThan(0);
-
-        // 총 시도 횟수는 threadCount와 같아야 함
-        assertThat(successCount.get() + failCount.get()).isEqualTo(threadCount);
+        // 100번 * 500원 = 50000원이어야 함
+        assertThat(resultUser.getPointBalance()).isEqualTo(50000);
     }
 
     @Test

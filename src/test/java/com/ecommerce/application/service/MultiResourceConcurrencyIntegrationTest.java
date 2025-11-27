@@ -177,6 +177,8 @@ class MultiResourceConcurrencyIntegrationTest {
 
                 } catch (Exception e) {
                     // 재고 부족으로 실패 가능
+                    System.out.println("[실패] 사용자 " + index + " 실패 원인: " + e.getClass().getSimpleName() + " - " + e.getMessage());
+                    e.printStackTrace();
                 } finally {
                     doneLatch.countDown();
                 }

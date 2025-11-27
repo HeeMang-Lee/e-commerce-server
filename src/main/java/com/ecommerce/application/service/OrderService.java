@@ -151,7 +151,7 @@ public class OrderService {
      * 재고 차감 트랜잭션 처리 (락 획득 후 실행)
      */
     @Transactional
-    private OrderItem executeStockReduction(Long orderId, Long productId, int quantity) {
+    public OrderItem executeStockReduction(Long orderId, Long productId, int quantity) {
         Product product = productRepository.getByIdOrThrow(productId);
         product.reduceStock(quantity);
         productRepository.save(product);
@@ -190,7 +190,7 @@ public class OrderService {
      * 재고 복구 트랜잭션 처리 (락 획득 후 실행)
      */
     @Transactional
-    private void executeStockRestore(Long productId, int quantity) {
+    public void executeStockRestore(Long productId, int quantity) {
         Product product = productRepository.getByIdOrThrow(productId);
         product.restoreStock(quantity);
         productRepository.save(product);
