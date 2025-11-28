@@ -24,21 +24,19 @@ public class PointService {
     private static final String POINT_DESCRIPTION_CHARGE = "포인트 충전";
     private static final String POINT_DESCRIPTION_DEDUCT = "포인트 차감";
     private static final String LOCK_KEY_PREFIX = "lock:point:";
+    private static final long LOCK_WAIT_TIME_SECONDS = 30;
+    private static final long LOCK_LEASE_TIME_SECONDS = 10;
 
     private final UserRepository userRepository;
     private final PointHistoryRepository pointHistoryRepository;
     private final RedissonClient redissonClient;
 
-    /**
-     * 포인트를 충전합니다.
-     * Redis 분산 락을 사용하여 동시성 제어를 수행합니다.
-     */
     public PointResponse chargePoint(PointChargeRequest request) {
         String lockKey = LOCK_KEY_PREFIX + request.userId();
         RLock lock = redissonClient.getLock(lockKey);
 
         try {
-            boolean acquired = lock.tryLock(30, 10, TimeUnit.SECONDS);
+            boolean acquired = lock.tryLock(LOCK_WAIT_TIME_SECONDS, LOCK_LEASE_TIME_SECONDS, TimeUnit.SECONDS);
             if (!acquired) {
                 throw new IllegalStateException("포인트 충전 락 획득 실패: userId=" + request.userId());
             }
@@ -55,9 +53,6 @@ public class PointService {
         }
     }
 
-    /**
-     * 포인트 충전 트랜잭션 처리 (락 획득 후 실행)
-     */
     @Transactional
     public PointResponse executeChargePoint(PointChargeRequest request) {
         User user = userRepository.getByIdOrThrow(request.userId());
@@ -82,16 +77,12 @@ public class PointService {
         return new PointResponse(user.getId(), user.getPointBalance());
     }
 
-    /**
-     * 포인트를 차감합니다.
-     * Redis 분산 락을 사용하여 동시성 제어를 수행합니다.
-     */
     public PointResponse deductPoint(Long userId, int amount, String description, Long orderId) {
         String lockKey = LOCK_KEY_PREFIX + userId;
         RLock lock = redissonClient.getLock(lockKey);
 
         try {
-            boolean acquired = lock.tryLock(30, 10, TimeUnit.SECONDS);
+            boolean acquired = lock.tryLock(LOCK_WAIT_TIME_SECONDS, LOCK_LEASE_TIME_SECONDS, TimeUnit.SECONDS);
             if (!acquired) {
                 throw new IllegalStateException("포인트 차감 락 획득 실패: userId=" + userId);
             }
@@ -108,9 +99,6 @@ public class PointService {
         }
     }
 
-    /**
-     * 포인트 차감 트랜잭션 처리 (락 획득 후 실행)
-     */
     @Transactional
     public PointResponse executeDeductPoint(Long userId, int amount, String description, Long orderId) {
         User user = userRepository.getByIdOrThrow(userId);

@@ -25,6 +25,8 @@ public class OrderService {
     private static final String POINT_DESCRIPTION_ORDER_PAYMENT = "주문 결제";
     private static final String LOCK_KEY_PREFIX_STOCK = "lock:stock:";
     private static final String LOCK_KEY_PREFIX_PAYMENT = "lock:payment:";
+    private static final long LOCK_WAIT_TIME_SECONDS = 30;
+    private static final long LOCK_LEASE_TIME_SECONDS = 10;
 
     private final UserRepository userRepository;
     private final ProductRepository productRepository;
@@ -123,7 +125,7 @@ public class OrderService {
         RLock lock = redissonClient.getLock(lockKey);
 
         try {
-            boolean acquired = lock.tryLock(30, 10, TimeUnit.SECONDS);
+            boolean acquired = lock.tryLock(LOCK_WAIT_TIME_SECONDS, LOCK_LEASE_TIME_SECONDS, TimeUnit.SECONDS);
             if (!acquired) {
                 throw new IllegalStateException("재고 락 획득 실패: productId=" + productId);
             }
@@ -156,7 +158,7 @@ public class OrderService {
         RLock lock = redissonClient.getLock(lockKey);
 
         try {
-            boolean acquired = lock.tryLock(30, 10, TimeUnit.SECONDS);
+            boolean acquired = lock.tryLock(LOCK_WAIT_TIME_SECONDS, LOCK_LEASE_TIME_SECONDS, TimeUnit.SECONDS);
             if (!acquired) {
                 throw new IllegalStateException("재고 복구 락 획득 실패: productId=" + productId);
             }
@@ -185,7 +187,7 @@ public class OrderService {
         RLock lock = redissonClient.getLock(lockKey);
 
         try {
-            boolean acquired = lock.tryLock(30, 10, TimeUnit.SECONDS);
+            boolean acquired = lock.tryLock(LOCK_WAIT_TIME_SECONDS, LOCK_LEASE_TIME_SECONDS, TimeUnit.SECONDS);
             if (!acquired) {
                 throw new IllegalStateException("결제 처리 락 획득 실패: orderId=" + orderId);
             }

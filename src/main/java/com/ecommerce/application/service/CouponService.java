@@ -22,23 +22,19 @@ public class CouponService {
 
     private static final String LOCK_KEY_PREFIX_COUPON = "lock:coupon:";
     private static final String LOCK_KEY_PREFIX_USERCOUPON = "lock:usercoupon:";
+    private static final long LOCK_WAIT_TIME_SECONDS = 30;
+    private static final long LOCK_LEASE_TIME_SECONDS = 10;
 
     private final CouponRepository couponRepository;
     private final UserCouponRepository userCouponRepository;
     private final RedissonClient redissonClient;
 
-    /**
-     * 쿠폰을 발급합니다.
-     * Redis 분산 락을 사용하여 쿠폰 재고 차감과 사용자 쿠폰 생성의 원자성을 보장합니다.
-     * 락은 couponId 기준으로 획득하여 쿠폰 재고를 보호합니다.
-     * 중복 발급은 트랜잭션 내에서 DB 조회로 확인합니다.
-     */
     public UserCouponResponse issueCoupon(CouponIssueRequest request) {
         String lockKey = LOCK_KEY_PREFIX_COUPON + request.couponId();
         RLock lock = redissonClient.getLock(lockKey);
 
         try {
-            boolean acquired = lock.tryLock(30, 10, TimeUnit.SECONDS);
+            boolean acquired = lock.tryLock(LOCK_WAIT_TIME_SECONDS, LOCK_LEASE_TIME_SECONDS, TimeUnit.SECONDS);
             if (!acquired) {
                 throw new IllegalStateException("쿠폰 발급 락 획득 실패: couponId=" + request.couponId());
             }
@@ -56,12 +52,8 @@ public class CouponService {
         }
     }
 
-    /**
-     * 쿠폰 발급 트랜잭션 처리 (락 획득 후 실행)
-     */
     @Transactional
     public UserCoupon executeIssueCoupon(CouponIssueRequest request) {
-        // 중복 발급 체크 (락 획득 후)
         userCouponRepository.findByUserIdAndCouponId(request.userId(), request.couponId())
                 .ifPresent(existingCoupon -> {
                     throw new IllegalStateException("이미 발급받은 쿠폰입니다");
@@ -82,16 +74,12 @@ public class CouponService {
         return newUserCoupon;
     }
 
-    /**
-     * 쿠폰을 사용합니다.
-     * Redis 분산 락을 사용하여 동시성 제어를 수행합니다.
-     */
     public UserCouponResponse useCoupon(Long userCouponId) {
         String lockKey = LOCK_KEY_PREFIX_USERCOUPON + userCouponId;
         RLock lock = redissonClient.getLock(lockKey);
 
         try {
-            boolean acquired = lock.tryLock(30, 10, TimeUnit.SECONDS);
+            boolean acquired = lock.tryLock(LOCK_WAIT_TIME_SECONDS, LOCK_LEASE_TIME_SECONDS, TimeUnit.SECONDS);
             if (!acquired) {
                 throw new IllegalStateException("쿠폰 사용 락 획득 실패: userCouponId=" + userCouponId);
             }
@@ -109,9 +97,6 @@ public class CouponService {
         }
     }
 
-    /**
-     * 쿠폰 사용 트랜잭션 처리 (락 획득 후 실행)
-     */
     @Transactional
     public UserCoupon executeUseCoupon(Long userCouponId) {
         UserCoupon userCoupon = userCouponRepository.getByIdOrThrow(userCouponId);
