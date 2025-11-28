@@ -37,12 +37,6 @@ public class PaymentDomainService {
     private final OutboxEventRepository outboxEventRepository;
     private final DataPlatformService dataPlatformService;
 
-    /**
-     * 결제 완료 처리
-     *
-     * @param orderId 주문 ID
-     * @return 완료된 결제
-     */
     @Transactional
     public OrderPayment completePayment(Long orderId) {
         Order order = orderRepository.getByIdOrThrow(orderId);
@@ -61,12 +55,6 @@ public class PaymentDomainService {
         return payment;
     }
 
-    /**
-     * 결제 실패 처리 (보상 트랜잭션)
-     *
-     * @param orderId 주문 ID
-     * @return 실패 처리된 결제
-     */
     @Transactional
     public OrderPayment failPayment(Long orderId) {
         OrderPayment payment = orderPaymentRepository.getByOrderIdOrThrow(orderId);
@@ -83,9 +71,6 @@ public class PaymentDomainService {
         return payment;
     }
 
-    /**
-     * 주문 데이터 전송 (아웃박스 패턴 적용)
-     */
     private void sendOrderDataWithOutbox(Order order, OrderPayment payment) {
         String orderData = buildOrderData(order, payment);
 

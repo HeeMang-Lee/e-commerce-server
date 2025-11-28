@@ -24,13 +24,6 @@ public class ProductDomainService {
 
     private final ProductRepository productRepository;
 
-    /**
-     * 재고 차감
-     *
-     * @param productId 상품 ID
-     * @param quantity 차감 수량
-     * @return 차감된 상품
-     */
     @Transactional
     public Product reduceStock(Long productId, int quantity) {
         Product product = productRepository.getByIdOrThrow(productId);
@@ -39,12 +32,6 @@ public class ProductDomainService {
         return product;
     }
 
-    /**
-     * 재고 복구
-     *
-     * @param productId 상품 ID
-     * @param quantity 복구 수량
-     */
     @Transactional
     public void restoreStock(Long productId, int quantity) {
         Product product = productRepository.getByIdOrThrow(productId);

@@ -30,13 +30,6 @@ public class PointDomainService {
     private final UserRepository userRepository;
     private final PointHistoryRepository pointHistoryRepository;
 
-    /**
-     * 포인트 충전
-     *
-     * @param userId 사용자 ID
-     * @param amount 충전 금액
-     * @return 충전 후 잔액
-     */
     @Transactional
     public int chargePoint(Long userId, int amount) {
         User user = userRepository.getByIdOrThrow(userId);
@@ -55,15 +48,6 @@ public class PointDomainService {
         return user.getPointBalance();
     }
 
-    /**
-     * 포인트 차감
-     *
-     * @param userId 사용자 ID
-     * @param amount 차감 금액
-     * @param description 차감 사유
-     * @param orderId 연관된 주문 ID (optional)
-     * @return 차감 후 잔액
-     */
     @Transactional
     public int deductPoint(Long userId, int amount, String description, Long orderId) {
         User user = userRepository.getByIdOrThrow(userId);

@@ -46,53 +46,38 @@ public class OrderService {
     private final UserCouponRepository userCouponRepository;
     private final RedissonClient redissonClient;
 
-    // Domain Services
     private final OrderDomainService orderDomainService;
     private final ProductDomainService productDomainService;
     private final PointDomainService pointDomainService;
     private final CouponDomainService couponDomainService;
     private final PaymentDomainService paymentDomainService;
 
-    /**
-     * 주문 생성 (Orchestration)
-     *
-     * 흐름:
-     * 1. 주문 생성
-     * 2. 재고 차감 (락 적용)
-     * 3. 결제 정보 생성
-     */
     public OrderResponse createOrder(OrderRequest request) {
         User user = userRepository.getByIdOrThrow(request.userId());
 
-        // 1. 주문 생성 (Domain Service)
         Order order = orderDomainService.createOrder(user.getId());
 
-        // 2. 재고 차감 및 주문 아이템 생성 (데드락 방지를 위해 정렬)
         List<OrderRequest.OrderItemRequest> sortedItems = request.items().stream()
                 .sorted((a, b) -> a.productId().compareTo(b.productId()))
                 .toList();
 
         List<OrderItem> orderItems = new ArrayList<>();
         for (OrderRequest.OrderItemRequest itemReq : sortedItems) {
-            // 분산 락 + 도메인 서비스 조율
             Product product = reduceStockWithLock(itemReq.productId(), itemReq.quantity());
             OrderItem orderItem = orderDomainService.createOrderItem(order.getId(), product, itemReq.quantity());
             orderItems.add(orderItem);
         }
 
-        // 3. 총 금액 계산
         int totalAmount = orderItems.stream()
                 .mapToInt(OrderItem::getItemTotalAmount)
                 .sum();
 
-        // 4. 할인 금액 (추후 쿠폰 할인 로직 구현 시 사용)
         int discountAmount = 0;
         if (request.userCouponId() != null) {
             UserCoupon userCoupon = userCouponRepository.getByIdOrThrow(request.userCouponId());
-            discountAmount = 0; // TODO: 쿠폰 할인 계산 로직
+            discountAmount = 0;
         }
 
-        // 5. 결제 정보 생성
         int usedPoint = request.usePoint() != null ? request.usePoint() : 0;
         OrderPayment payment = new OrderPayment(
                 order.getId(),
@@ -143,9 +128,6 @@ public class OrderService {
         return OrderHistoryResponse.from(order, items);
     }
 
-    /**
-     * 재고 차감 with 분산 락
-     */
     private Product reduceStockWithLock(Long productId, int quantity) {
         String lockKey = LOCK_KEY_PREFIX_STOCK + productId;
         RLock lock = redissonClient.getLock(lockKey);
@@ -168,9 +150,6 @@ public class OrderService {
         }
     }
 
-    /**
-     * 재고 복구 with 분산 락 (보상 트랜잭션)
-     */
     private void restoreStockWithLock(Long productId, int quantity) {
         String lockKey = LOCK_KEY_PREFIX_STOCK + productId;
         RLock lock = redissonClient.getLock(lockKey);
@@ -193,18 +172,6 @@ public class OrderService {
         }
     }
 
-    /**
-     * 결제 처리 (Orchestration with Compensation)
-     *
-     * 흐름:
-     * 1. 포인트 차감
-     * 2. 쿠폰 사용
-     * 3. 결제 완료
-     *
-     * 실패 시 보상 트랜잭션:
-     * - 포인트 롤백 필요 (로그)
-     * - 쿠폰 롤백 필요 (로그)
-     */
     public PaymentResponse processPayment(Long orderId, PaymentRequest request) {
         String lockKey = LOCK_KEY_PREFIX_PAYMENT + orderId;
         RLock lock = redissonClient.getLock(lockKey);
@@ -227,9 +194,6 @@ public class OrderService {
         }
     }
 
-    /**
-     * 결제 Orchestration (여러 도메인 서비스 조율)
-     */
     private PaymentResponse executePaymentOrchestration(Long orderId, PaymentRequest request) {
         Order order = orderRepository.getByIdOrThrow(orderId);
         OrderPayment payment = orderPaymentRepository.getByOrderIdOrThrow(orderId);
@@ -239,7 +203,6 @@ public class OrderService {
         boolean couponUsed = false;
 
         try {
-            // 1. 포인트 차감 (Domain Service)
             if (usedPoint > 0) {
                 pointDomainService.deductPoint(
                         order.getUserId(),
@@ -250,13 +213,11 @@ public class OrderService {
                 pointDeducted = true;
             }
 
-            // 2. 쿠폰 사용 (Domain Service)
             if (payment.getUserCouponId() != null) {
                 couponDomainService.useCoupon(payment.getUserCouponId());
                 couponUsed = true;
             }
 
-            // 3. 결제 완료 (Domain Service)
             OrderPayment completedPayment = paymentDomainService.completePayment(orderId);
 
             return new PaymentResponse(
@@ -269,21 +230,14 @@ public class OrderService {
 
         } catch (Exception e) {
             log.error("결제 실패, 보상 트랜잭션 시작: orderId={}, error={}", orderId, e.getMessage());
-
-            // 보상 트랜잭션 실행
             executeCompensationTransaction(orderId, order, pointDeducted, usedPoint, couponUsed, payment.getUserCouponId());
-
             throw e;
         }
     }
 
-    /**
-     * 보상 트랜잭션 실행 (재고, 포인트, 쿠폰 복구)
-     */
     private void executeCompensationTransaction(Long orderId, Order order, boolean pointDeducted,
                                                  int usedPoint, boolean couponUsed, Long userCouponId) {
         try {
-            // 1. 재고 복구
             List<OrderItem> orderItems = orderItemRepository.findByOrderId(orderId);
             for (OrderItem item : orderItems) {
                 try {
@@ -294,7 +248,6 @@ public class OrderService {
                 }
             }
 
-            // 2. 포인트 복구
             if (pointDeducted) {
                 try {
                     pointDomainService.chargePoint(order.getUserId(), usedPoint);
@@ -304,7 +257,6 @@ public class OrderService {
                 }
             }
 
-            // 3. 쿠폰 복구 (사용 취소)
             if (couponUsed && userCouponId != null) {
                 try {
                     couponDomainService.cancelCouponUsage(userCouponId);
@@ -314,7 +266,6 @@ public class OrderService {
                 }
             }
 
-            // 4. 결제 상태를 FAILED로 변경
             try {
                 paymentDomainService.failPayment(orderId);
                 log.info("결제 상태 FAILED로 변경: orderId={}", orderId);

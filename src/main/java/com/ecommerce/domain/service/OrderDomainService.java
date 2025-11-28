@@ -28,12 +28,6 @@ public class OrderDomainService {
     private final OrderRepository orderRepository;
     private final OrderItemRepository orderItemRepository;
 
-    /**
-     * 주문 생성
-     *
-     * @param userId 사용자 ID
-     * @return 생성된 주문
-     */
     @Transactional
     public Order createOrder(Long userId) {
         Order order = new Order(userId);
@@ -43,14 +37,6 @@ public class OrderDomainService {
         return order;
     }
 
-    /**
-     * 주문 아이템 생성
-     *
-     * @param orderId 주문 ID
-     * @param product 상품
-     * @param quantity 수량
-     * @return 생성된 주문 아이템
-     */
     @Transactional
     public OrderItem createOrderItem(Long orderId, Product product, int quantity) {
         OrderItem orderItem = new OrderItem(product, quantity);
