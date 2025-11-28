@@ -2,20 +2,29 @@ package com.ecommerce.application.service;
 
 import com.ecommerce.application.dto.CouponIssueRequest;
 import com.ecommerce.application.dto.UserCouponResponse;
-import com.ecommerce.domain.entity.Coupon;
 import com.ecommerce.domain.entity.UserCoupon;
-import com.ecommerce.domain.repository.CouponRepository;
 import com.ecommerce.domain.repository.UserCouponRepository;
+import com.ecommerce.domain.service.CouponDomainService;
 import lombok.RequiredArgsConstructor;
 import org.redisson.api.RLock;
 import org.redisson.api.RedissonClient;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
+/**
+ * 쿠폰 Application Facade 서비스
+ *
+ * 책임:
+ * - 분산 락 관리 (동시성 제어)
+ * - 도메인 서비스 호출 조율
+ * - DTO 변환
+ *
+ * 주의:
+ * - 비즈니스 로직은 CouponDomainService에 위임
+ * - Self-Invocation 없음
+ */
 @Service
 @RequiredArgsConstructor
 public class CouponService {
@@ -25,9 +34,9 @@ public class CouponService {
     private static final long LOCK_WAIT_TIME_SECONDS = 30;
     private static final long LOCK_LEASE_TIME_SECONDS = 10;
 
-    private final CouponRepository couponRepository;
     private final UserCouponRepository userCouponRepository;
     private final RedissonClient redissonClient;
+    private final CouponDomainService couponDomainService;
 
     public UserCouponResponse issueCoupon(CouponIssueRequest request) {
         String lockKey = LOCK_KEY_PREFIX_COUPON + request.couponId();
@@ -39,7 +48,7 @@ public class CouponService {
                 throw new IllegalStateException("쿠폰 발급 락 획득 실패: couponId=" + request.couponId());
             }
 
-            UserCoupon userCoupon = executeIssueCoupon(request);
+            UserCoupon userCoupon = couponDomainService.issueCoupon(request.userId(), request.couponId());
             return UserCouponResponse.from(userCoupon);
 
         } catch (InterruptedException e) {
@@ -50,28 +59,6 @@ public class CouponService {
                 lock.unlock();
             }
         }
-    }
-
-    @Transactional
-    public UserCoupon executeIssueCoupon(CouponIssueRequest request) {
-        userCouponRepository.findByUserIdAndCouponId(request.userId(), request.couponId())
-                .ifPresent(existingCoupon -> {
-                    throw new IllegalStateException("이미 발급받은 쿠폰입니다");
-                });
-
-        Coupon coupon = couponRepository.getByIdOrThrow(request.couponId());
-        coupon.issue();
-        couponRepository.save(coupon);
-
-        LocalDateTime expiresAt = LocalDateTime.now().plusDays(coupon.getValidPeriodDays());
-        UserCoupon newUserCoupon = new UserCoupon(
-                request.userId(),
-                request.couponId(),
-                expiresAt
-        );
-        userCouponRepository.save(newUserCoupon);
-
-        return newUserCoupon;
     }
 
     public UserCouponResponse useCoupon(Long userCouponId) {
@@ -84,7 +71,7 @@ public class CouponService {
                 throw new IllegalStateException("쿠폰 사용 락 획득 실패: userCouponId=" + userCouponId);
             }
 
-            UserCoupon userCoupon = executeUseCoupon(userCouponId);
+            UserCoupon userCoupon = couponDomainService.useCoupon(userCouponId);
             return UserCouponResponse.from(userCoupon);
 
         } catch (InterruptedException e) {
@@ -95,14 +82,6 @@ public class CouponService {
                 lock.unlock();
             }
         }
-    }
-
-    @Transactional
-    public UserCoupon executeUseCoupon(Long userCouponId) {
-        UserCoupon userCoupon = userCouponRepository.getByIdOrThrow(userCouponId);
-        userCoupon.use();
-        userCouponRepository.save(userCoupon);
-        return userCoupon;
     }
 
     public List<UserCouponResponse> getUserCoupons(Long userId) {

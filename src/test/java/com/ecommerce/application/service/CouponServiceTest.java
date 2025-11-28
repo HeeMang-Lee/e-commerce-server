@@ -8,6 +8,7 @@ import com.ecommerce.domain.entity.UserCoupon;
 import com.ecommerce.domain.entity.UserCouponStatus;
 import com.ecommerce.domain.repository.CouponRepository;
 import com.ecommerce.domain.repository.UserCouponRepository;
+import com.ecommerce.domain.service.CouponDomainService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -43,6 +44,9 @@ class CouponServiceTest {
     @Mock
     private RedissonClient redissonClient;
 
+    @Mock
+    private CouponDomainService couponDomainService;
+
     @InjectMocks
     private CouponService couponService;
 
@@ -51,9 +55,8 @@ class CouponServiceTest {
     void issueCoupon() throws Exception {
         // given
         LocalDateTime now = LocalDateTime.now();
-        Coupon coupon = new Coupon("10% 할인", DiscountType.PERCENTAGE, 10,
-                100, now.minusDays(1), now.plusDays(30), 30);
-        coupon.setId(1L);
+        UserCoupon userCoupon = new UserCoupon(1L, 1L, now.plusDays(30));
+        userCoupon.setId(1L);
 
         CouponIssueRequest request = new CouponIssueRequest(1L, 1L);
 
@@ -63,15 +66,7 @@ class CouponServiceTest {
         when(lock.tryLock(anyLong(), anyLong(), any(TimeUnit.class))).thenReturn(true);
         when(lock.isHeldByCurrentThread()).thenReturn(true);
 
-        when(userCouponRepository.findByUserIdAndCouponId(1L, 1L)).thenReturn(Optional.empty());
-        when(couponRepository.getByIdOrThrow(1L)).thenReturn(coupon);
-        when(couponRepository.save(any(Coupon.class))).thenAnswer(inv -> inv.getArgument(0));
-
-        when(userCouponRepository.save(any(UserCoupon.class))).thenAnswer(invocation -> {
-            UserCoupon uc = invocation.getArgument(0);
-            uc.setId(1L);
-            return uc;
-        });
+        when(couponDomainService.issueCoupon(1L, 1L)).thenReturn(userCoupon);
 
         // when
         UserCouponResponse response = couponService.issueCoupon(request);
@@ -80,8 +75,7 @@ class CouponServiceTest {
         assertThat(response.userId()).isEqualTo(1L);
         assertThat(response.couponId()).isEqualTo(1L);
         assertThat(response.status()).isEqualTo(UserCouponStatus.AVAILABLE);
-        assertThat(coupon.getCurrentIssueCount()).isEqualTo(1); // 발급 횟수 증가 확인
-        verify(userCouponRepository).save(any(UserCoupon.class));
+        verify(couponDomainService).issueCoupon(1L, 1L);
 
         // 락 획득 및 해제 검증
         verify(lock, times(1)).tryLock(anyLong(), anyLong(), any(TimeUnit.class));
@@ -100,8 +94,7 @@ class CouponServiceTest {
         when(lock.tryLock(anyLong(), anyLong(), any(TimeUnit.class))).thenReturn(true);
         when(lock.isHeldByCurrentThread()).thenReturn(true);
 
-        when(userCouponRepository.findByUserIdAndCouponId(1L, 999L)).thenReturn(Optional.empty());
-        when(couponRepository.getByIdOrThrow(999L))
+        when(couponDomainService.issueCoupon(1L, 999L))
                 .thenThrow(new IllegalArgumentException("쿠폰을 찾을 수 없습니다"));
 
         // when & then

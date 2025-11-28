@@ -3,6 +3,7 @@ package com.ecommerce.application.service;
 import com.ecommerce.application.dto.*;
 import com.ecommerce.domain.entity.*;
 import com.ecommerce.domain.repository.*;
+import com.ecommerce.domain.service.*;
 import com.ecommerce.infrastructure.external.DataPlatformService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -50,10 +51,18 @@ class OrderServiceTest {
     private DataPlatformService dataPlatformService;
     @Mock
     private RedissonClient redissonClient;
+
+    // Domain Services
     @Mock
-    private PointService pointService;
+    private OrderDomainService orderDomainService;
     @Mock
-    private CouponService couponService;
+    private ProductDomainService productDomainService;
+    @Mock
+    private PointDomainService pointDomainService;
+    @Mock
+    private CouponDomainService couponDomainService;
+    @Mock
+    private PaymentDomainService paymentDomainService;
 
     @InjectMocks
     private OrderService orderService;
@@ -68,6 +77,13 @@ class OrderServiceTest {
         OrderRequest.OrderItemRequest itemReq = new OrderRequest.OrderItemRequest(1L, 2);
         OrderRequest request = new OrderRequest(1L, Arrays.asList(itemReq), null, null);
 
+        Order order = new Order(1L);
+        order.setId(1L);
+        order.assignOrderNumber();
+
+        OrderItem orderItem = new OrderItem(product, 2);
+        orderItem.setOrderId(1L);
+
         // Mock RedissonClient and RLock
         RLock lock = mock(RLock.class);
         when(redissonClient.getLock(anyString())).thenReturn(lock);
@@ -75,15 +91,9 @@ class OrderServiceTest {
         when(lock.isHeldByCurrentThread()).thenReturn(true);
 
         when(userRepository.getByIdOrThrow(1L)).thenReturn(user);
-        when(productRepository.getByIdOrThrow(1L)).thenReturn(product);
-        when(productRepository.save(any(Product.class))).thenAnswer(inv -> inv.getArgument(0));
-
-        when(orderRepository.save(any(Order.class))).thenAnswer(inv -> {
-            Order o = inv.getArgument(0);
-            o.setId(1L);
-            return o;
-        });
-        when(orderItemRepository.saveAll(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(orderDomainService.createOrder(1L)).thenReturn(order);
+        when(productDomainService.reduceStock(1L, 2)).thenReturn(product);
+        when(orderDomainService.createOrderItem(1L, product, 2)).thenReturn(orderItem);
         when(orderPaymentRepository.save(any(OrderPayment.class))).thenAnswer(inv -> inv.getArgument(0));
 
         // when
@@ -95,12 +105,10 @@ class OrderServiceTest {
         assertThat(response.discountAmount()).isEqualTo(0);
         assertThat(response.usedPoint()).isEqualTo(0);
         assertThat(response.finalAmount()).isEqualTo(100000);
-        assertThat(product.getStockQuantity()).isEqualTo(8); // 재고 차감 확인
 
-        // 주문 생성 시에는 포인트 차감, 쿠폰 사용, 외부 전송이 발생하지 않음
-        verify(pointHistoryRepository, never()).save(any());
-        verify(userCouponRepository, never()).save(any());
-        verify(dataPlatformService, never()).sendOrderData(anyString());
+        verify(orderDomainService).createOrder(1L);
+        verify(productDomainService).reduceStock(1L, 2);
+        verify(orderDomainService).createOrderItem(1L, product, 2);
 
         // 락 획득 및 해제 검증
         verify(lock, times(1)).tryLock(anyLong(), anyLong(), any(TimeUnit.class));
@@ -163,12 +171,14 @@ class OrderServiceTest {
 
         when(orderRepository.getByIdOrThrow(1L)).thenReturn(order);
         when(orderPaymentRepository.getByOrderIdOrThrow(1L)).thenReturn(payment);
-        when(orderPaymentRepository.save(any(OrderPayment.class))).thenAnswer(inv -> inv.getArgument(0));
-        when(dataPlatformService.sendOrderData(anyString())).thenReturn(true);
+        when(pointDomainService.deductPoint(eq(1L), eq(5000), anyString(), eq(1L)))
+                .thenReturn(5000);
 
-        // PointService Mock 설정
-        when(pointService.deductPoint(eq(1L), eq(5000), anyString(), eq(1L)))
-                .thenReturn(new PointResponse(1L, 5000));
+        // Mock payment complete
+        when(paymentDomainService.completePayment(1L)).thenAnswer(inv -> {
+            payment.complete();
+            return payment;
+        });
 
         // when
         PaymentResponse response = orderService.processPayment(1L, request);
@@ -178,7 +188,7 @@ class OrderServiceTest {
         assertThat(response.usedPoint()).isEqualTo(5000);
         assertThat(response.paymentStatus()).isEqualTo("COMPLETED");
 
-        verify(pointService, times(1)).deductPoint(eq(1L), eq(5000), anyString(), eq(1L));
-        verify(dataPlatformService, times(1)).sendOrderData(anyString());
+        verify(pointDomainService, times(1)).deductPoint(eq(1L), eq(5000), anyString(), eq(1L));
+        verify(paymentDomainService, times(1)).completePayment(1L);
     }
 }

@@ -8,6 +8,7 @@ import com.ecommerce.domain.entity.TransactionType;
 import com.ecommerce.domain.entity.User;
 import com.ecommerce.domain.repository.PointHistoryRepository;
 import com.ecommerce.domain.repository.UserRepository;
+import com.ecommerce.domain.service.PointDomainService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -42,6 +43,9 @@ class PointServiceTest {
     @Mock
     private RedissonClient redissonClient;
 
+    @Mock
+    private PointDomainService pointDomainService;
+
     @InjectMocks
     private PointService pointService;
 
@@ -66,9 +70,7 @@ class PointServiceTest {
         // given
         setupLock();
         PointChargeRequest request = new PointChargeRequest(1L, 10000);
-        when(userRepository.getByIdOrThrow(1L)).thenReturn(user);
-        when(userRepository.save(any(User.class))).thenReturn(user);
-        when(pointHistoryRepository.save(any(PointHistory.class))).thenReturn(null);
+        when(pointDomainService.chargePoint(1L, 10000)).thenReturn(10000);
 
         // when
         PointResponse response = pointService.chargePoint(request);
@@ -76,8 +78,7 @@ class PointServiceTest {
         // then
         assertThat(response.userId()).isEqualTo(1L);
         assertThat(response.balance()).isEqualTo(10000);
-        verify(userRepository).save(user);
-        verify(pointHistoryRepository).save(any(PointHistory.class));
+        verify(pointDomainService).chargePoint(1L, 10000);
 
         // 락 획득 및 해제 검증
         verify(lock, times(1)).tryLock(anyLong(), anyLong(), any(TimeUnit.class));
@@ -90,13 +91,13 @@ class PointServiceTest {
         // given
         setupLock();
         PointChargeRequest request = new PointChargeRequest(999L, 10000);
-        when(userRepository.getByIdOrThrow(999L)).thenThrow(new IllegalArgumentException("사용자를 찾을 수 없습니다: 999"));
+        when(pointDomainService.chargePoint(999L, 10000))
+                .thenThrow(new IllegalArgumentException("사용자를 찾을 수 없습니다: 999"));
 
         // when & then
         assertThatThrownBy(() -> pointService.chargePoint(request))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("사용자를 찾을 수 없습니다")
-                .hasMessageContaining("999");
+                .hasMessageContaining("사용자를 찾을 수 없습니다");
 
         // 락 해제 검증
         verify(lock, times(1)).unlock();

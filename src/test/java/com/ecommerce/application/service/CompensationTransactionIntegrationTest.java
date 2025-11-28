@@ -232,9 +232,9 @@ class CompensationTransactionIntegrationTest {
         assertThat(paymentResponse.paymentStatus()).isEqualTo("COMPLETED");
         assertThat(paymentResponse.usedPoint()).isEqualTo(3000);
 
-        // 재고 차감 확인
+        // 재고 차감 확인 (1개 주문했으므로 재고가 1 감소해야 함)
         Product afterProduct = productRepository.findById(testProduct.getId()).orElseThrow();
-        assertThat(afterProduct.getStockQuantity()).isEqualTo(initialStock);
+        assertThat(afterProduct.getStockQuantity()).isEqualTo(initialStock - 1);
 
         // 포인트 차감 확인
         User afterUser = userRepository.findById(testUser.getId()).orElseThrow();
