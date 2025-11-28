@@ -9,6 +9,7 @@ import org.testcontainers.utility.DockerImageName;
 /**
  * Testcontainers 설정
  * 통합 테스트 시 MySQL 컨테이너를 자동으로 시작하고 관리합니다.
+ * Redis는 별도 Docker 컨테이너(포트 6380)를 사용합니다.
  */
 @TestConfiguration(proxyBeanMethods = false)
 public class TestcontainersConfig {

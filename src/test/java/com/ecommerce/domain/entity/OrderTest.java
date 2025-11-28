@@ -16,23 +16,23 @@ class OrderTest {
 
         // then
         assertThat(order.getUserId()).isEqualTo(1L);
-        assertThat(order.getOrderNumber()).isNotNull();
-        assertThat(order.getOrderNumber()).startsWith("ORD-");
+        assertThat(order.getOrderNumber()).startsWith("ORD-TEMP-");
         assertThat(order.getCreatedAt()).isNotNull();
         assertThat(order.getUpdatedAt()).isNotNull();
     }
 
     @Test
-    @DisplayName("주문 번호가 자동으로 생성된다")
-    void orderNumber_ShouldBeGeneratedAutomatically() {
+    @DisplayName("주문 번호가 ID 기반으로 할당된다")
+    void orderNumber_ShouldBeAssignedBasedOnId() {
+        // given
+        Order order = new Order(1L);
+        order.setId(123L);
+
         // when
-        Order order1 = new Order(1L);
-        Order order2 = new Order(1L);
+        order.assignOrderNumber();
 
         // then
-        assertThat(order1.getOrderNumber()).isNotNull();
-        assertThat(order2.getOrderNumber()).isNotNull();
-        assertThat(order1.getOrderNumber()).isNotEqualTo(order2.getOrderNumber());
+        assertThat(order.getOrderNumber()).isEqualTo("ORD-0000000123");
     }
 
     @Test

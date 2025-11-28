@@ -3,6 +3,7 @@ package com.ecommerce.application.service;
 import com.ecommerce.application.dto.*;
 import com.ecommerce.domain.entity.*;
 import com.ecommerce.domain.repository.*;
+import com.ecommerce.domain.service.*;
 import com.ecommerce.infrastructure.external.DataPlatformService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -10,16 +11,20 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.redisson.api.RLock;
+import org.redisson.api.RedissonClient;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -44,13 +49,27 @@ class OrderServiceTest {
     private OutboxEventRepository outboxEventRepository;
     @Mock
     private DataPlatformService dataPlatformService;
+    @Mock
+    private RedissonClient redissonClient;
+
+    // Domain Services
+    @Mock
+    private OrderDomainService orderDomainService;
+    @Mock
+    private ProductDomainService productDomainService;
+    @Mock
+    private PointDomainService pointDomainService;
+    @Mock
+    private CouponDomainService couponDomainService;
+    @Mock
+    private PaymentDomainService paymentDomainService;
 
     @InjectMocks
     private OrderService orderService;
 
     @Test
     @DisplayName("주문을 생성한다 - 쿠폰/포인트 없음")
-    void createOrder_WithoutCouponAndPoint() {
+    void createOrder_WithoutCouponAndPoint() throws Exception {
         // given
         User user = new User(1L, "테스트", "test@test.com", 10000);
         Product product = new Product(1L, "키보드", "무선", 50000, 10, "전자");
@@ -58,20 +77,23 @@ class OrderServiceTest {
         OrderRequest.OrderItemRequest itemReq = new OrderRequest.OrderItemRequest(1L, 2);
         OrderRequest request = new OrderRequest(1L, Arrays.asList(itemReq), null, null);
 
+        Order order = new Order(1L);
+        order.setId(1L);
+        order.assignOrderNumber();
+
+        OrderItem orderItem = new OrderItem(product, 2);
+        orderItem.setOrderId(1L);
+
+        // Mock RedissonClient and RLock
+        RLock lock = mock(RLock.class);
+        when(redissonClient.getLock(anyString())).thenReturn(lock);
+        when(lock.tryLock(anyLong(), anyLong(), any(TimeUnit.class))).thenReturn(true);
+        when(lock.isHeldByCurrentThread()).thenReturn(true);
+
         when(userRepository.getByIdOrThrow(1L)).thenReturn(user);
-
-        // executeWithLock 모킹: Function을 받아서 실행
-        when(productRepository.executeWithLock(eq(1L), any())).thenAnswer(invocation -> {
-            var operation = invocation.getArgument(1, java.util.function.Function.class);
-            return operation.apply(product);
-        });
-
-        when(orderRepository.save(any(Order.class))).thenAnswer(inv -> {
-            Order o = inv.getArgument(0);
-            o.setId(1L);
-            return o;
-        });
-        when(orderItemRepository.saveAll(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(orderDomainService.createOrder(1L)).thenReturn(order);
+        when(productDomainService.reduceStock(1L, 2)).thenReturn(product);
+        when(orderDomainService.createOrderItem(1L, product, 2)).thenReturn(orderItem);
         when(orderPaymentRepository.save(any(OrderPayment.class))).thenAnswer(inv -> inv.getArgument(0));
 
         // when
@@ -83,12 +105,14 @@ class OrderServiceTest {
         assertThat(response.discountAmount()).isEqualTo(0);
         assertThat(response.usedPoint()).isEqualTo(0);
         assertThat(response.finalAmount()).isEqualTo(100000);
-        assertThat(product.getStockQuantity()).isEqualTo(8); // 재고 차감 확인
 
-        // 주문 생성 시에는 포인트 차감, 쿠폰 사용, 외부 전송이 발생하지 않음
-        verify(pointHistoryRepository, never()).save(any());
-        verify(userCouponRepository, never()).save(any());
-        verify(dataPlatformService, never()).sendOrderData(anyString());
+        verify(orderDomainService).createOrder(1L);
+        verify(productDomainService).reduceStock(1L, 2);
+        verify(orderDomainService).createOrderItem(1L, product, 2);
+
+        // 락 획득 및 해제 검증
+        verify(lock, times(1)).tryLock(anyLong(), anyLong(), any(TimeUnit.class));
+        verify(lock, times(1)).unlock();
     }
 
     @Test
@@ -122,7 +146,7 @@ class OrderServiceTest {
 
     @Test
     @DisplayName("결제를 처리한다 - 포인트 사용")
-    void processPayment_WithPoint() {
+    void processPayment_WithPoint() throws Exception {
         // given
         User user = new User(1L, "테스트", "test@test.com", 10000);
         Product product = new Product(1L, "키보드", "무선", 50000, 8, "전자");
@@ -139,13 +163,22 @@ class OrderServiceTest {
 
         PaymentRequest request = new PaymentRequest(null, 5000);
 
+        // Mock RedissonClient and RLock
+        RLock lock = mock(RLock.class);
+        when(redissonClient.getLock(anyString())).thenReturn(lock);
+        when(lock.tryLock(anyLong(), anyLong(), any(TimeUnit.class))).thenReturn(true);
+        when(lock.isHeldByCurrentThread()).thenReturn(true);
+
         when(orderRepository.getByIdOrThrow(1L)).thenReturn(order);
-        when(userRepository.getByIdOrThrow(1L)).thenReturn(user);
         when(orderPaymentRepository.getByOrderIdOrThrow(1L)).thenReturn(payment);
-        when(orderPaymentRepository.save(any(OrderPayment.class))).thenAnswer(inv -> inv.getArgument(0));
-        when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
-        when(pointHistoryRepository.save(any(PointHistory.class))).thenAnswer(inv -> inv.getArgument(0));
-        when(dataPlatformService.sendOrderData(anyString())).thenReturn(true);
+        when(pointDomainService.deductPoint(eq(1L), eq(5000), anyString(), eq(1L)))
+                .thenReturn(5000);
+
+        // Mock payment complete
+        when(paymentDomainService.completePayment(1L)).thenAnswer(inv -> {
+            payment.complete();
+            return payment;
+        });
 
         // when
         PaymentResponse response = orderService.processPayment(1L, request);
@@ -154,9 +187,8 @@ class OrderServiceTest {
         assertThat(response.orderId()).isEqualTo(1L);
         assertThat(response.usedPoint()).isEqualTo(5000);
         assertThat(response.paymentStatus()).isEqualTo("COMPLETED");
-        assertThat(user.getPointBalance()).isEqualTo(5000); // 10000 - 5000
 
-        verify(pointHistoryRepository, times(1)).save(any());
-        verify(dataPlatformService, times(1)).sendOrderData(anyString());
+        verify(pointDomainService, times(1)).deductPoint(eq(1L), eq(5000), anyString(), eq(1L));
+        verify(paymentDomainService, times(1)).completePayment(1L);
     }
 }

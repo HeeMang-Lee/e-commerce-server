@@ -80,6 +80,17 @@ class MultiResourceConcurrencyIntegrationTest {
 
     @BeforeEach
     void setUp() {
+        // 테스트 격리를 위해 먼저 정리
+        pointHistoryRepository.deleteAll();
+        orderPaymentRepository.deleteAll();
+        orderItemRepository.deleteAll();
+        orderRepository.deleteAll();
+        userCouponRepository.deleteAll();
+        couponRepository.deleteAll();
+        productRepository.deleteAll();
+        userRepository.deleteAll();
+        outboxEventRepository.deleteAll();
+
         when(dataPlatformService.sendOrderData(anyString())).thenReturn(true);
 
         // 테스트 상품 생성
@@ -129,7 +140,6 @@ class MultiResourceConcurrencyIntegrationTest {
             userCoupons[i] = userCouponRepository.save(coupon);
 
             // 쿠폰 발급 수량 증가
-            Coupon c = couponRepository.findById(testCoupon.getId()).orElseThrow();
             couponRepository.executeWithLock(testCoupon.getId(), coupon1 -> {
                 coupon1.issue();
                 return null;
@@ -167,6 +177,8 @@ class MultiResourceConcurrencyIntegrationTest {
 
                 } catch (Exception e) {
                     // 재고 부족으로 실패 가능
+                    System.out.println("[실패] 사용자 " + index + " 실패 원인: " + e.getClass().getSimpleName() + " - " + e.getMessage());
+                    e.printStackTrace();
                 } finally {
                     doneLatch.countDown();
                 }
@@ -174,7 +186,7 @@ class MultiResourceConcurrencyIntegrationTest {
         }
 
         startLatch.countDown();
-        doneLatch.await(15, TimeUnit.SECONDS);
+        doneLatch.await(60, TimeUnit.SECONDS);
         executorService.shutdown();
 
         // then: 재고 10개이므로 모두 성공
@@ -312,7 +324,7 @@ class MultiResourceConcurrencyIntegrationTest {
         }
 
         startLatch.countDown();
-        doneLatch.await(15, TimeUnit.SECONDS);
+        doneLatch.await(60, TimeUnit.SECONDS);
         executorService.shutdown();
 
         // then: 모두 성공

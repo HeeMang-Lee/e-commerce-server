@@ -209,6 +209,10 @@ class CompensationTransactionIntegrationTest {
         UserCoupon userCoupon = new UserCoupon(testUser.getId(), testCoupon.getId(), LocalDateTime.now().plusDays(30));
         userCouponRepository.save(userCoupon);
 
+        // 주문 생성 전 상태 저장
+        int initialStock = productRepository.findById(testProduct.getId()).orElseThrow().getStockQuantity();
+        int initialPoint = userRepository.findById(testUser.getId()).orElseThrow().getPointBalance();
+
         OrderRequest.OrderItemRequest itemReq = new OrderRequest.OrderItemRequest(testProduct.getId(), 1);
         OrderRequest orderReq = new OrderRequest(
                 testUser.getId(),
@@ -220,10 +224,6 @@ class CompensationTransactionIntegrationTest {
 
         when(dataPlatformService.sendOrderData(anyString())).thenReturn(true);
 
-        // 결제 전 상태
-        int initialStock = productRepository.findById(testProduct.getId()).orElseThrow().getStockQuantity();
-        int initialPoint = userRepository.findById(testUser.getId()).orElseThrow().getPointBalance();
-
         // when: 포인트 + 쿠폰 함께 사용하여 결제
         PaymentRequest paymentReq = new PaymentRequest(null, 3000);
         var paymentResponse = orderService.processPayment(orderResponse.orderId(), paymentReq);
@@ -232,9 +232,9 @@ class CompensationTransactionIntegrationTest {
         assertThat(paymentResponse.paymentStatus()).isEqualTo("COMPLETED");
         assertThat(paymentResponse.usedPoint()).isEqualTo(3000);
 
-        // 재고 차감 확인
+        // 재고 차감 확인 (1개 주문했으므로 재고가 1 감소해야 함)
         Product afterProduct = productRepository.findById(testProduct.getId()).orElseThrow();
-        assertThat(afterProduct.getStockQuantity()).isEqualTo(initialStock);
+        assertThat(afterProduct.getStockQuantity()).isEqualTo(initialStock - 1);
 
         // 포인트 차감 확인
         User afterUser = userRepository.findById(testUser.getId()).orElseThrow();

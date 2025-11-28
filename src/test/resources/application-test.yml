@@ -3,6 +3,12 @@ spring:
     # Testcontainers가 동적으로 설정함
     driver-class-name: com.mysql.cj.jdbc.Driver
 
+  data:
+    redis:
+      host: localhost
+      port: 6380  # 테스트용 Redis (비밀번호 없음)
+      password:   # 빈 문자열로 명시 (비밀번호 없음)
+
   jpa:
     hibernate:
       ddl-auto: create-drop  # 테스트 시작 시 스키마 생성, 종료 시 삭제

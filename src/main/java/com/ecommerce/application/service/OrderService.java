@@ -3,57 +3,70 @@ package com.ecommerce.application.service;
 import com.ecommerce.application.dto.*;
 import com.ecommerce.domain.entity.*;
 import com.ecommerce.domain.repository.*;
-import com.ecommerce.infrastructure.external.DataPlatformService;
+import com.ecommerce.domain.service.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.redisson.api.RLock;
+import org.redisson.api.RedissonClient;
 import org.springframework.stereotype.Service;
 
-import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
+/**
+ * 주문 Application Facade 서비스
+ *
+ * 책임:
+ * - 분산 락 관리 (동시성 제어)
+ * - 여러 도메인 서비스의 조율 (Orchestration)
+ * - 주문/결제 흐름 관리
+ * - DTO 변환
+ *
+ * 주의:
+ * - 비즈니스 로직은 각 Domain Service에 위임
+ * - Self-Invocation 없음
+ * - 트랜잭션은 Domain Service 레벨에서 관리
+ */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class OrderService {
 
-    private static final String EVENT_TYPE_ORDER_COMPLETED = "ORDER_COMPLETED";
+    private static final String LOCK_KEY_PREFIX_STOCK = "lock:stock:";
+    private static final String LOCK_KEY_PREFIX_PAYMENT = "lock:payment:";
     private static final String POINT_DESCRIPTION_ORDER_PAYMENT = "주문 결제";
+    private static final long LOCK_WAIT_TIME_SECONDS = 30;
+    private static final long LOCK_LEASE_TIME_SECONDS = 10;
 
     private final UserRepository userRepository;
-    private final ProductRepository productRepository;
     private final OrderRepository orderRepository;
     private final OrderItemRepository orderItemRepository;
     private final OrderPaymentRepository orderPaymentRepository;
     private final UserCouponRepository userCouponRepository;
-    private final PointHistoryRepository pointHistoryRepository;
-    private final OutboxEventRepository outboxEventRepository;
-    private final DataPlatformService dataPlatformService;
+    private final RedissonClient redissonClient;
 
-    /**
-     * 주문을 생성합니다. 재고를 차감하고 PENDING 상태의 결제 정보를 생성합니다.
-     * 실제 결제 처리는 processPayment에서 수행됩니다.
-     */
+    private final OrderDomainService orderDomainService;
+    private final ProductDomainService productDomainService;
+    private final PointDomainService pointDomainService;
+    private final CouponDomainService couponDomainService;
+    private final PaymentDomainService paymentDomainService;
+
     public OrderResponse createOrder(OrderRequest request) {
         User user = userRepository.getByIdOrThrow(request.userId());
 
-        Order order = new Order(user.getId());
-        orderRepository.save(order);
+        Order order = orderDomainService.createOrder(user.getId());
+
+        List<OrderRequest.OrderItemRequest> sortedItems = request.items().stream()
+                .sorted((a, b) -> a.productId().compareTo(b.productId()))
+                .toList();
 
         List<OrderItem> orderItems = new ArrayList<>();
-        for (OrderRequest.OrderItemRequest itemReq : request.items()) {
-            OrderItem orderItem = productRepository.executeWithLock(
-                    itemReq.productId(),
-                    product -> {
-                        product.reduceStock(itemReq.quantity());
-                        OrderItem item = new OrderItem(product, itemReq.quantity());
-                        item.setOrderId(order.getId());
-                        return item;
-                    }
-            );
+        for (OrderRequest.OrderItemRequest itemReq : sortedItems) {
+            Product product = reduceStockWithLock(itemReq.productId(), itemReq.quantity());
+            OrderItem orderItem = orderDomainService.createOrderItem(order.getId(), product, itemReq.quantity());
             orderItems.add(orderItem);
         }
-        orderItemRepository.saveAll(orderItems);
 
         int totalAmount = orderItems.stream()
                 .mapToInt(OrderItem::getItemTotalAmount)
@@ -62,7 +75,6 @@ public class OrderService {
         int discountAmount = 0;
         if (request.userCouponId() != null) {
             UserCoupon userCoupon = userCouponRepository.getByIdOrThrow(request.userCouponId());
-            // TODO: 쿠폰 타입에 따라 할인 금액 계산
             discountAmount = 0;
         }
 
@@ -97,7 +109,6 @@ public class OrderService {
                 .map(Order::getId)
                 .toList();
 
-        // IN 절로 모든 주문 아이템을 한 번에 조회 (N+1 문제 해결)
         List<OrderItem> allOrderItems = orderItemRepository.findByOrderIdIn(orderIds);
 
         var orderItemsMap = allOrderItems.stream()
@@ -117,19 +128,75 @@ public class OrderService {
         return OrderHistoryResponse.from(order, items);
     }
 
-    /**
-     * 결제를 처리합니다.
-     * 포인트/쿠폰 사용, 결제 완료, 판매 이력 기록, 외부 데이터 전송을 수행하며
-     * 실패 시 재고, 포인트, 쿠폰을 복구합니다.
-     */
-    public PaymentResponse processPayment(Long orderId, PaymentRequest request) {
-        Order order = orderRepository.getByIdOrThrow(orderId);
-        User user = userRepository.getByIdOrThrow(order.getUserId());
-        OrderPayment payment = orderPaymentRepository.getByOrderIdOrThrow(orderId);
+    private Product reduceStockWithLock(Long productId, int quantity) {
+        String lockKey = LOCK_KEY_PREFIX_STOCK + productId;
+        RLock lock = redissonClient.getLock(lockKey);
 
-        if (payment.getPaymentStatus() == PaymentStatus.COMPLETED) {
-            throw new IllegalStateException("이미 완료된 결제입니다");
+        try {
+            boolean acquired = lock.tryLock(LOCK_WAIT_TIME_SECONDS, LOCK_LEASE_TIME_SECONDS, TimeUnit.SECONDS);
+            if (!acquired) {
+                throw new IllegalStateException("재고 락 획득 실패: productId=" + productId);
+            }
+
+            return productDomainService.reduceStock(productId, quantity);
+
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("락 획득 중 인터럽트 발생", e);
+        } finally {
+            if (lock.isHeldByCurrentThread()) {
+                lock.unlock();
+            }
         }
+    }
+
+    private void restoreStockWithLock(Long productId, int quantity) {
+        String lockKey = LOCK_KEY_PREFIX_STOCK + productId;
+        RLock lock = redissonClient.getLock(lockKey);
+
+        try {
+            boolean acquired = lock.tryLock(LOCK_WAIT_TIME_SECONDS, LOCK_LEASE_TIME_SECONDS, TimeUnit.SECONDS);
+            if (!acquired) {
+                throw new IllegalStateException("재고 복구 락 획득 실패: productId=" + productId);
+            }
+
+            productDomainService.restoreStock(productId, quantity);
+
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("락 획득 중 인터럽트 발생", e);
+        } finally {
+            if (lock.isHeldByCurrentThread()) {
+                lock.unlock();
+            }
+        }
+    }
+
+    public PaymentResponse processPayment(Long orderId, PaymentRequest request) {
+        String lockKey = LOCK_KEY_PREFIX_PAYMENT + orderId;
+        RLock lock = redissonClient.getLock(lockKey);
+
+        try {
+            boolean acquired = lock.tryLock(LOCK_WAIT_TIME_SECONDS, LOCK_LEASE_TIME_SECONDS, TimeUnit.SECONDS);
+            if (!acquired) {
+                throw new IllegalStateException("결제 처리 락 획득 실패: orderId=" + orderId);
+            }
+
+            return executePaymentOrchestration(orderId, request);
+
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("락 획득 중 인터럽트 발생", e);
+        } finally {
+            if (lock.isHeldByCurrentThread()) {
+                lock.unlock();
+            }
+        }
+    }
+
+    private PaymentResponse executePaymentOrchestration(Long orderId, PaymentRequest request) {
+        Order order = orderRepository.getByIdOrThrow(orderId);
+        OrderPayment payment = orderPaymentRepository.getByOrderIdOrThrow(orderId);
 
         int usedPoint = request.usePoint() != null ? request.usePoint() : 0;
         boolean pointDeducted = false;
@@ -137,104 +204,78 @@ public class OrderService {
 
         try {
             if (usedPoint > 0) {
-                user.deduct(usedPoint);
-                userRepository.save(user);
-                PointHistory history = new PointHistory(
-                        user.getId(),
-                        TransactionType.USE,
+                pointDomainService.deductPoint(
+                        order.getUserId(),
                         usedPoint,
-                        user.getPointBalance(),
                         POINT_DESCRIPTION_ORDER_PAYMENT,
                         orderId
                 );
-                pointHistoryRepository.save(history);
                 pointDeducted = true;
             }
 
             if (payment.getUserCouponId() != null) {
-                UserCoupon userCoupon = userCouponRepository.getByIdOrThrow(payment.getUserCouponId());
-                userCoupon.use();
-                userCouponRepository.save(userCoupon);
+                couponDomainService.useCoupon(payment.getUserCouponId());
                 couponUsed = true;
             }
 
-            payment.complete();
-            orderPaymentRepository.save(payment);
-
-            String orderData = "{\"orderId\":" + order.getId() +
-                    ",\"orderNumber\":\"" + order.getOrderNumber() +
-                    "\",\"userId\":" + user.getId() +
-                    ",\"totalAmount\":" + payment.getOriginalAmount() +
-                    ",\"finalAmount\":" + payment.getFinalAmount() + "}";
-
-            // 외부 전송 실패 시 아웃박스 패턴으로 재시도 보장
-            try {
-                boolean success = dataPlatformService.sendOrderData(orderData);
-                if (success) {
-                    log.info("주문 데이터 전송 성공: orderId={}", order.getId());
-                } else {
-                    log.warn("주문 데이터 전송 실패, 아웃박스에 저장: orderId={}", order.getId());
-                    OutboxEvent outboxEvent = new OutboxEvent(EVENT_TYPE_ORDER_COMPLETED, orderData);
-                    outboxEventRepository.save(outboxEvent);
-                }
-            } catch (Exception e) {
-                log.error("주문 데이터 전송 중 예외 발생, 아웃박스에 저장: orderId={}", order.getId(), e);
-                OutboxEvent outboxEvent = new OutboxEvent(EVENT_TYPE_ORDER_COMPLETED, orderData);
-                outboxEventRepository.save(outboxEvent);
-            }
+            OrderPayment completedPayment = paymentDomainService.completePayment(orderId);
 
             return new PaymentResponse(
                     orderId,
-                    payment.getPaymentStatus().name(),
-                    payment.getFinalAmount(),
+                    completedPayment.getPaymentStatus().name(),
+                    completedPayment.getFinalAmount(),
                     usedPoint,
-                    payment.getPaidAt()
+                    completedPayment.getPaidAt()
             );
 
         } catch (Exception e) {
-            log.error("결제 처리 중 오류 발생, 보상 트랜잭션 시작: orderId={}", orderId, e);
-
-            // 1. 재고 복구
-            List<OrderItem> orderItems = orderItemRepository.findByOrderId(orderId);
-            for (OrderItem item : orderItems) {
-                productRepository.executeWithLock(
-                        item.getProductId(),
-                        product -> {
-                            product.restoreStock(item.getQuantity());
-                            return null;
-                        }
-                );
-            }
-
-            // 2. 포인트 복구
-            if (pointDeducted) {
-                User userToRestore = userRepository.getByIdOrThrow(order.getUserId());
-                userToRestore.charge(usedPoint);
-                userRepository.save(userToRestore);
-                PointHistory restoreHistory = new PointHistory(
-                        userToRestore.getId(),
-                        TransactionType.REFUND,
-                        usedPoint,
-                        userToRestore.getPointBalance(),
-                        "결제 실패로 인한 포인트 환불",
-                        orderId
-                );
-                pointHistoryRepository.save(restoreHistory);
-                log.info("포인트 복구 완료: userId={}, amount={}", userToRestore.getId(), usedPoint);
-            }
-
-            // 3. 쿠폰 복구
-            if (couponUsed && payment.getUserCouponId() != null) {
-                UserCoupon userCoupon = userCouponRepository.getByIdOrThrow(payment.getUserCouponId());
-                userCoupon.restore();
-                userCouponRepository.save(userCoupon);
-                log.info("쿠폰 복구 완료: userCouponId={}", userCoupon.getId());
-            }
-
-            payment.fail();
-            orderPaymentRepository.save(payment);
-            log.info("보상 트랜잭션 완료: orderId={}", orderId);
+            log.error("결제 실패, 보상 트랜잭션 시작: orderId={}, error={}", orderId, e.getMessage());
+            executeCompensationTransaction(orderId, order, pointDeducted, usedPoint, couponUsed, payment.getUserCouponId());
             throw e;
         }
     }
+
+    private void executeCompensationTransaction(Long orderId, Order order, boolean pointDeducted,
+                                                 int usedPoint, boolean couponUsed, Long userCouponId) {
+        try {
+            List<OrderItem> orderItems = orderItemRepository.findByOrderId(orderId);
+            for (OrderItem item : orderItems) {
+                try {
+                    restoreStockWithLock(item.getProductId(), item.getQuantity());
+                    log.info("재고 복구 완료: productId={}, quantity={}", item.getProductId(), item.getQuantity());
+                } catch (Exception ex) {
+                    log.error("재고 복구 실패: productId={}, quantity={}", item.getProductId(), item.getQuantity(), ex);
+                }
+            }
+
+            if (pointDeducted) {
+                try {
+                    pointDomainService.chargePoint(order.getUserId(), usedPoint);
+                    log.info("포인트 복구 완료: userId={}, amount={}", order.getUserId(), usedPoint);
+                } catch (Exception ex) {
+                    log.error("포인트 복구 실패: userId={}, amount={}", order.getUserId(), usedPoint, ex);
+                }
+            }
+
+            if (couponUsed && userCouponId != null) {
+                try {
+                    couponDomainService.cancelCouponUsage(userCouponId);
+                    log.info("쿠폰 복구 완료: userCouponId={}", userCouponId);
+                } catch (Exception ex) {
+                    log.error("쿠폰 복구 실패: userCouponId={}", userCouponId, ex);
+                }
+            }
+
+            try {
+                paymentDomainService.failPayment(orderId);
+                log.info("결제 상태 FAILED로 변경: orderId={}", orderId);
+            } catch (Exception ex) {
+                log.error("결제 상태 변경 실패: orderId={}", orderId, ex);
+            }
+
+        } catch (Exception e) {
+            log.error("보상 트랜잭션 중 오류 발생: orderId={}", orderId, e);
+        }
+    }
+
 }

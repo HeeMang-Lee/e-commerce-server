@@ -8,6 +8,7 @@ import com.ecommerce.domain.entity.TransactionType;
 import com.ecommerce.domain.entity.User;
 import com.ecommerce.domain.repository.PointHistoryRepository;
 import com.ecommerce.domain.repository.UserRepository;
+import com.ecommerce.domain.service.PointDomainService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -15,13 +16,18 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.redisson.api.RLock;
+import org.redisson.api.RedissonClient;
 
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -34,24 +40,37 @@ class PointServiceTest {
     @Mock
     private PointHistoryRepository pointHistoryRepository;
 
+    @Mock
+    private RedissonClient redissonClient;
+
+    @Mock
+    private PointDomainService pointDomainService;
+
     @InjectMocks
     private PointService pointService;
 
     private User user;
+    private RLock lock;
 
     @BeforeEach
     void setUp() {
         user = new User(1L, "테스트", "test@test.com", 0);
     }
 
+    private void setupLock() throws Exception {
+        lock = mock(RLock.class);
+        when(redissonClient.getLock(anyString())).thenReturn(lock);
+        when(lock.tryLock(anyLong(), anyLong(), any(TimeUnit.class))).thenReturn(true);
+        when(lock.isHeldByCurrentThread()).thenReturn(true);
+    }
+
     @Test
     @DisplayName("포인트를 충전한다")
-    void chargePoint() {
+    void chargePoint() throws Exception {
         // given
+        setupLock();
         PointChargeRequest request = new PointChargeRequest(1L, 10000);
-        when(userRepository.getByIdOrThrow(1L)).thenReturn(user);
-        when(userRepository.save(any(User.class))).thenReturn(user);
-        when(pointHistoryRepository.save(any(PointHistory.class))).thenReturn(null);
+        when(pointDomainService.chargePoint(1L, 10000)).thenReturn(10000);
 
         // when
         PointResponse response = pointService.chargePoint(request);
@@ -59,22 +78,29 @@ class PointServiceTest {
         // then
         assertThat(response.userId()).isEqualTo(1L);
         assertThat(response.balance()).isEqualTo(10000);
-        verify(userRepository).save(user);
-        verify(pointHistoryRepository).save(any(PointHistory.class));
+        verify(pointDomainService).chargePoint(1L, 10000);
+
+        // 락 획득 및 해제 검증
+        verify(lock, times(1)).tryLock(anyLong(), anyLong(), any(TimeUnit.class));
+        verify(lock, times(1)).unlock();
     }
 
     @Test
     @DisplayName("존재하지 않는 사용자는 충전할 수 없다")
-    void chargePoint_UserNotFound() {
+    void chargePoint_UserNotFound() throws Exception {
         // given
+        setupLock();
         PointChargeRequest request = new PointChargeRequest(999L, 10000);
-        when(userRepository.getByIdOrThrow(999L)).thenThrow(new IllegalArgumentException("사용자를 찾을 수 없습니다: 999"));
+        when(pointDomainService.chargePoint(999L, 10000))
+                .thenThrow(new IllegalArgumentException("사용자를 찾을 수 없습니다: 999"));
 
         // when & then
         assertThatThrownBy(() -> pointService.chargePoint(request))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("사용자를 찾을 수 없습니다")
-                .hasMessageContaining("999");
+                .hasMessageContaining("사용자를 찾을 수 없습니다");
+
+        // 락 해제 검증
+        verify(lock, times(1)).unlock();
     }
 
     @Test
