@@ -10,7 +10,6 @@ import lombok.NoArgsConstructor;
 import java.time.LocalDateTime;
 
 /**
- * 상품 도메인 Entity
  * 재고 관리 및 가격 계산 비즈니스 로직을 포함합니다.
  */
 @Entity
@@ -79,18 +78,11 @@ public class Product extends BaseTimeEntity {
         return basePrice.getAmount();
     }
 
-    /**
-     * 재고가 충분한지 확인합니다.
-     *
-     * @return 재고가 충분하면 true, 부족하면 false
-     */
     public boolean hasStock(int quantity) {
         return this.stockQuantity >= quantity;
     }
 
     /**
-     * 재고를 차감합니다.
-     *
      * @throws IllegalArgumentException 수량이 0 이하인 경우
      * @throws IllegalStateException 재고가 부족한 경우
      */
@@ -108,8 +100,6 @@ public class Product extends BaseTimeEntity {
     }
 
     /**
-     * 재고를 복구합니다.
-     *
      * @throws IllegalArgumentException 수량이 0 이하인 경우
      */
     public void restoreStock(int quantity) {
@@ -121,8 +111,6 @@ public class Product extends BaseTimeEntity {
     }
 
     /**
-     * 주어진 수량에 대한 총 가격을 계산합니다.
-     *
      * @throws IllegalArgumentException 수량이 1 미만인 경우
      */
     public int calculatePrice(int quantity) {
@@ -132,9 +120,6 @@ public class Product extends BaseTimeEntity {
         return this.basePrice.multiply(quantity).getAmount();
     }
 
-    /**
-     * 상품 상태를 변경합니다.
-     */
     public void changeStatus(ProductStatus status) {
         if (status == null) {
             throw new IllegalArgumentException("상태는 필수입니다");

@@ -11,7 +11,6 @@ import lombok.NoArgsConstructor;
 import java.time.LocalDateTime;
 
 /**
- * 사용자 도메인 Entity
  * 포인트 관리 비즈니스 로직을 포함합니다.
  */
 @Entity
@@ -62,18 +61,11 @@ public class User extends BaseTimeEntity {
         return pointBalance.getAmount();
     }
 
-    /**
-     * 포인트가 충분한지 확인합니다.
-     *
-     * @return 포인트가 충분하면 true
-     */
     public boolean hasPoint(int amount) {
         return this.pointBalance.isGreaterThanOrEqual(Money.of(amount));
     }
 
     /**
-     * 포인트를 차감합니다.
-     *
      * @throws IllegalArgumentException 금액이 0 이하인 경우
      * @throws IllegalStateException 포인트가 부족한 경우
      */
@@ -92,8 +84,6 @@ public class User extends BaseTimeEntity {
     }
 
     /**
-     * 포인트를 충전합니다.
-     *
      * @throws IllegalArgumentException 금액이 0 이하인 경우
      */
     public void charge(int amount) {
