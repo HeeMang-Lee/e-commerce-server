@@ -209,6 +209,10 @@ class CompensationTransactionIntegrationTest {
         UserCoupon userCoupon = new UserCoupon(testUser.getId(), testCoupon.getId(), LocalDateTime.now().plusDays(30));
         userCouponRepository.save(userCoupon);
 
+        // 주문 생성 전 상태 저장
+        int initialStock = productRepository.findById(testProduct.getId()).orElseThrow().getStockQuantity();
+        int initialPoint = userRepository.findById(testUser.getId()).orElseThrow().getPointBalance();
+
         OrderRequest.OrderItemRequest itemReq = new OrderRequest.OrderItemRequest(testProduct.getId(), 1);
         OrderRequest orderReq = new OrderRequest(
                 testUser.getId(),
@@ -219,10 +223,6 @@ class CompensationTransactionIntegrationTest {
         var orderResponse = orderService.createOrder(orderReq);
 
         when(dataPlatformService.sendOrderData(anyString())).thenReturn(true);
-
-        // 결제 전 상태
-        int initialStock = productRepository.findById(testProduct.getId()).orElseThrow().getStockQuantity();
-        int initialPoint = userRepository.findById(testUser.getId()).orElseThrow().getPointBalance();
 
         // when: 포인트 + 쿠폰 함께 사용하여 결제
         PaymentRequest paymentReq = new PaymentRequest(null, 3000);

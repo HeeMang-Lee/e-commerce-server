@@ -257,14 +257,14 @@ public class OrderService {
             }
 
             // 3. 결제 완료 (Domain Service)
-            paymentDomainService.completePayment(orderId);
+            OrderPayment completedPayment = paymentDomainService.completePayment(orderId);
 
             return new PaymentResponse(
                     orderId,
-                    payment.getPaymentStatus().name(),
-                    payment.getFinalAmount(),
+                    completedPayment.getPaymentStatus().name(),
+                    completedPayment.getFinalAmount(),
                     usedPoint,
-                    payment.getPaidAt()
+                    completedPayment.getPaidAt()
             );
 
         } catch (Exception e) {
