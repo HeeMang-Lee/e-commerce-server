@@ -16,6 +16,7 @@ import org.springframework.data.redis.serializer.StringRedisSerializer;
 
 import java.time.Duration;
 import java.util.List;
+import java.util.concurrent.ThreadLocalRandom;
 
 /**
  * Redis Cache 설정
@@ -37,6 +38,7 @@ public class RedisCacheConfig {
     private static final long PRODUCT_LIST_CACHE_TTL_MINUTES = 5;
     private static final long PRODUCT_CACHE_TTL_SECONDS = 30;
     private static final long POPULAR_PRODUCTS_CACHE_TTL_MINUTES = 10;
+    private static final double TTL_JITTER_RATE = 0.1;
 
     @Bean
     public CacheManager cacheManager(RedisConnectionFactory connectionFactory, ObjectMapper objectMapper) {
@@ -57,7 +59,7 @@ public class RedisCacheConfig {
                 .serializeKeysWith(
                         RedisSerializationContext.SerializationPair.fromSerializer(new StringRedisSerializer())
                 )
-                .entryTtl(Duration.ofMinutes(DEFAULT_CACHE_TTL_MINUTES));
+                .entryTtl(withJitter(Duration.ofMinutes(DEFAULT_CACHE_TTL_MINUTES)));
 
         /**
          * 상품 목록 캐시 설정 (Look Aside 패턴)
@@ -75,7 +77,7 @@ public class RedisCacheConfig {
                 .serializeValuesWith(
                         RedisSerializationContext.SerializationPair.fromSerializer(productListSerializer)
                 )
-                .entryTtl(Duration.ofMinutes(PRODUCT_LIST_CACHE_TTL_MINUTES));
+                .entryTtl(withJitter(Duration.ofMinutes(PRODUCT_LIST_CACHE_TTL_MINUTES)));
 
         /**
          * 상품 상세 캐시 설정 (Look Aside 패턴)
@@ -93,7 +95,7 @@ public class RedisCacheConfig {
                 .serializeValuesWith(
                         RedisSerializationContext.SerializationPair.fromSerializer(productSerializer)
                 )
-                .entryTtl(Duration.ofSeconds(PRODUCT_CACHE_TTL_SECONDS));
+                .entryTtl(withJitter(Duration.ofSeconds(PRODUCT_CACHE_TTL_SECONDS)));
 
         /**
          * 인기 상품 캐시 설정 (Look Aside 패턴)
@@ -119,7 +121,7 @@ public class RedisCacheConfig {
                 .serializeValuesWith(
                         RedisSerializationContext.SerializationPair.fromSerializer(popularProductsSerializer)
                 )
-                .entryTtl(Duration.ofMinutes(POPULAR_PRODUCTS_CACHE_TTL_MINUTES));
+                .entryTtl(withJitter(Duration.ofMinutes(POPULAR_PRODUCTS_CACHE_TTL_MINUTES)));
 
         return RedisCacheManager.builder(connectionFactory)
                 .cacheDefaults(defaultConfig)
@@ -127,5 +129,20 @@ public class RedisCacheConfig {
                 .withCacheConfiguration(PRODUCT_CACHE, productConfig)
                 .withCacheConfiguration(POPULAR_PRODUCTS_CACHE, popularProductsConfig)
                 .build();
+    }
+
+    /**
+     * TTL에 Jitter를 적용하여 Cache Stampede 방지
+     *
+     * 동일한 TTL을 가진 캐시들이 동시에 만료되면 DB에 동시 요청이 몰릴 수 있음.
+     * ±10% 범위의 랜덤 Jitter를 추가하여 만료 시점을 분산시킴.
+     *
+     * @param baseTtl 기본 TTL
+     * @return Jitter가 적용된 TTL
+     */
+    private Duration withJitter(Duration baseTtl) {
+        long baseMillis = baseTtl.toMillis();
+        double jitterMultiplier = 1.0 + (ThreadLocalRandom.current().nextDouble() * 2 - 1) * TTL_JITTER_RATE;
+        return Duration.ofMillis((long) (baseMillis * jitterMultiplier));
     }
 }
