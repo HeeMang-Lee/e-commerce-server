@@ -33,6 +33,11 @@ public class RedisCacheConfig {
     public static final String PRODUCT_LIST_CACHE = "productList";
     public static final String PRODUCT_CACHE = "product";
 
+    private static final long DEFAULT_CACHE_TTL_MINUTES = 5;
+    private static final long PRODUCT_LIST_CACHE_TTL_MINUTES = 5;
+    private static final long PRODUCT_CACHE_TTL_SECONDS = 30;
+    private static final long POPULAR_PRODUCTS_CACHE_TTL_MINUTES = 10;
+
     @Bean
     public CacheManager cacheManager(RedisConnectionFactory connectionFactory, ObjectMapper objectMapper) {
 
@@ -52,7 +57,7 @@ public class RedisCacheConfig {
                 .serializeKeysWith(
                         RedisSerializationContext.SerializationPair.fromSerializer(new StringRedisSerializer())
                 )
-                .entryTtl(Duration.ofMinutes(5));
+                .entryTtl(Duration.ofMinutes(DEFAULT_CACHE_TTL_MINUTES));
 
         /**
          * 상품 목록 캐시 설정 (Look Aside 패턴)
@@ -70,7 +75,7 @@ public class RedisCacheConfig {
                 .serializeValuesWith(
                         RedisSerializationContext.SerializationPair.fromSerializer(productListSerializer)
                 )
-                .entryTtl(Duration.ofMinutes(5));
+                .entryTtl(Duration.ofMinutes(PRODUCT_LIST_CACHE_TTL_MINUTES));
 
         /**
          * 상품 상세 캐시 설정 (Look Aside 패턴)
@@ -88,7 +93,7 @@ public class RedisCacheConfig {
                 .serializeValuesWith(
                         RedisSerializationContext.SerializationPair.fromSerializer(productSerializer)
                 )
-                .entryTtl(Duration.ofSeconds(30));
+                .entryTtl(Duration.ofSeconds(PRODUCT_CACHE_TTL_SECONDS));
 
         /**
          * 인기 상품 캐시 설정 (Look Aside 패턴)
@@ -114,7 +119,7 @@ public class RedisCacheConfig {
                 .serializeValuesWith(
                         RedisSerializationContext.SerializationPair.fromSerializer(popularProductsSerializer)
                 )
-                .entryTtl(Duration.ofMinutes(10));
+                .entryTtl(Duration.ofMinutes(POPULAR_PRODUCTS_CACHE_TTL_MINUTES));
 
         return RedisCacheManager.builder(connectionFactory)
                 .cacheDefaults(defaultConfig)
