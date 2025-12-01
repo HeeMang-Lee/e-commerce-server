@@ -4,7 +4,6 @@ import com.ecommerce.application.dto.ProductListResponse;
 import com.ecommerce.application.dto.ProductResponse;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.springframework.cache.CacheManager;
 import org.springframework.cache.annotation.EnableCaching;
 import org.springframework.context.annotation.Bean;
@@ -35,9 +34,7 @@ public class RedisCacheConfig {
     public static final String PRODUCT_CACHE = "product";
 
     @Bean
-    public CacheManager cacheManager(RedisConnectionFactory connectionFactory) {
-        ObjectMapper objectMapper = new ObjectMapper();
-        objectMapper.registerModule(new JavaTimeModule());
+    public CacheManager cacheManager(RedisConnectionFactory connectionFactory, ObjectMapper objectMapper) {
 
         // 상품 목록용 Serializer (List<ProductListResponse>)
         SnappyRedisSerializer<List<ProductListResponse>> productListSerializer =
