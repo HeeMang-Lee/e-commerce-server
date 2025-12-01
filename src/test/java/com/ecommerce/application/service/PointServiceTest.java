@@ -9,6 +9,7 @@ import com.ecommerce.domain.entity.User;
 import com.ecommerce.domain.repository.PointHistoryRepository;
 import com.ecommerce.domain.repository.UserRepository;
 import com.ecommerce.domain.service.PointDomainService;
+import com.ecommerce.infrastructure.lock.DistributedLockExecutor;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -16,17 +17,13 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.redisson.api.RLock;
-import org.redisson.api.RedissonClient;
 
 import java.util.Arrays;
 import java.util.List;
-import java.util.Optional;
-import java.util.concurrent.TimeUnit;
+import java.util.function.Supplier;
 
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 
@@ -41,7 +38,7 @@ class PointServiceTest {
     private PointHistoryRepository pointHistoryRepository;
 
     @Mock
-    private RedissonClient redissonClient;
+    private DistributedLockExecutor lockExecutor;
 
     @Mock
     private PointDomainService pointDomainService;
@@ -50,25 +47,23 @@ class PointServiceTest {
     private PointService pointService;
 
     private User user;
-    private RLock lock;
 
     @BeforeEach
     void setUp() {
         user = new User(1L, "테스트", "test@test.com", 0);
-    }
 
-    private void setupLock() throws Exception {
-        lock = mock(RLock.class);
-        when(redissonClient.getLock(anyString())).thenReturn(lock);
-        when(lock.tryLock(anyLong(), anyLong(), any(TimeUnit.class))).thenReturn(true);
-        when(lock.isHeldByCurrentThread()).thenReturn(true);
+        // lockExecutor가 supplier를 실행하도록 설정
+        lenient().when(lockExecutor.executeWithLock(anyString(), any(Supplier.class)))
+                .thenAnswer(invocation -> {
+                    Supplier<?> supplier = invocation.getArgument(1);
+                    return supplier.get();
+                });
     }
 
     @Test
     @DisplayName("포인트를 충전한다")
-    void chargePoint() throws Exception {
+    void chargePoint() {
         // given
-        setupLock();
         PointChargeRequest request = new PointChargeRequest(1L, 10000);
         when(pointDomainService.chargePoint(1L, 10000)).thenReturn(10000);
 
@@ -79,17 +74,13 @@ class PointServiceTest {
         assertThat(response.userId()).isEqualTo(1L);
         assertThat(response.balance()).isEqualTo(10000);
         verify(pointDomainService).chargePoint(1L, 10000);
-
-        // 락 획득 및 해제 검증
-        verify(lock, times(1)).tryLock(anyLong(), anyLong(), any(TimeUnit.class));
-        verify(lock, times(1)).unlock();
+        verify(lockExecutor).executeWithLock(anyString(), any(Supplier.class));
     }
 
     @Test
     @DisplayName("존재하지 않는 사용자는 충전할 수 없다")
-    void chargePoint_UserNotFound() throws Exception {
+    void chargePoint_UserNotFound() {
         // given
-        setupLock();
         PointChargeRequest request = new PointChargeRequest(999L, 10000);
         when(pointDomainService.chargePoint(999L, 10000))
                 .thenThrow(new IllegalArgumentException("사용자를 찾을 수 없습니다: 999"));
@@ -99,8 +90,7 @@ class PointServiceTest {
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("사용자를 찾을 수 없습니다");
 
-        // 락 해제 검증
-        verify(lock, times(1)).unlock();
+        verify(lockExecutor).executeWithLock(anyString(), any(Supplier.class));
     }
 
     @Test

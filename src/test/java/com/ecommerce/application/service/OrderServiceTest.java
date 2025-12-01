@@ -4,27 +4,24 @@ import com.ecommerce.application.dto.*;
 import com.ecommerce.domain.entity.*;
 import com.ecommerce.domain.repository.*;
 import com.ecommerce.domain.service.*;
-import com.ecommerce.infrastructure.external.DataPlatformService;
+import com.ecommerce.infrastructure.lock.DistributedLockExecutor;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.redisson.api.RLock;
-import org.redisson.api.RedissonClient;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Optional;
-import java.util.concurrent.TimeUnit;
+import java.util.function.Supplier;
 
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -34,8 +31,6 @@ class OrderServiceTest {
     @Mock
     private UserRepository userRepository;
     @Mock
-    private ProductRepository productRepository;
-    @Mock
     private OrderRepository orderRepository;
     @Mock
     private OrderItemRepository orderItemRepository;
@@ -44,13 +39,7 @@ class OrderServiceTest {
     @Mock
     private UserCouponRepository userCouponRepository;
     @Mock
-    private PointHistoryRepository pointHistoryRepository;
-    @Mock
-    private OutboxEventRepository outboxEventRepository;
-    @Mock
-    private DataPlatformService dataPlatformService;
-    @Mock
-    private RedissonClient redissonClient;
+    private DistributedLockExecutor lockExecutor;
 
     // Domain Services
     @Mock
@@ -67,9 +56,26 @@ class OrderServiceTest {
     @InjectMocks
     private OrderService orderService;
 
+    @BeforeEach
+    void setUp() {
+        // lockExecutor가 supplier를 실행하도록 설정
+        lenient().when(lockExecutor.executeWithLock(anyString(), any(Supplier.class)))
+                .thenAnswer(invocation -> {
+                    Supplier<?> supplier = invocation.getArgument(1);
+                    return supplier.get();
+                });
+
+        // Runnable 버전도 설정
+        lenient().doAnswer(invocation -> {
+            Runnable runnable = invocation.getArgument(1);
+            runnable.run();
+            return null;
+        }).when(lockExecutor).executeWithLock(anyString(), any(Runnable.class));
+    }
+
     @Test
     @DisplayName("주문을 생성한다 - 쿠폰/포인트 없음")
-    void createOrder_WithoutCouponAndPoint() throws Exception {
+    void createOrder_WithoutCouponAndPoint() {
         // given
         User user = new User(1L, "테스트", "test@test.com", 10000);
         Product product = new Product(1L, "키보드", "무선", 50000, 10, "전자");
@@ -83,12 +89,6 @@ class OrderServiceTest {
 
         OrderItem orderItem = new OrderItem(product, 2);
         orderItem.setOrderId(1L);
-
-        // Mock RedissonClient and RLock
-        RLock lock = mock(RLock.class);
-        when(redissonClient.getLock(anyString())).thenReturn(lock);
-        when(lock.tryLock(anyLong(), anyLong(), any(TimeUnit.class))).thenReturn(true);
-        when(lock.isHeldByCurrentThread()).thenReturn(true);
 
         when(userRepository.getByIdOrThrow(1L)).thenReturn(user);
         when(orderDomainService.createOrder(1L)).thenReturn(order);
@@ -109,10 +109,7 @@ class OrderServiceTest {
         verify(orderDomainService).createOrder(1L);
         verify(productDomainService).reduceStock(1L, 2);
         verify(orderDomainService).createOrderItem(1L, product, 2);
-
-        // 락 획득 및 해제 검증
-        verify(lock, times(1)).tryLock(anyLong(), anyLong(), any(TimeUnit.class));
-        verify(lock, times(1)).unlock();
+        verify(lockExecutor).executeWithLock(anyString(), any(Supplier.class));
     }
 
     @Test
@@ -146,7 +143,7 @@ class OrderServiceTest {
 
     @Test
     @DisplayName("결제를 처리한다 - 포인트 사용")
-    void processPayment_WithPoint() throws Exception {
+    void processPayment_WithPoint() {
         // given
         User user = new User(1L, "테스트", "test@test.com", 10000);
         Product product = new Product(1L, "키보드", "무선", 50000, 8, "전자");
@@ -162,12 +159,6 @@ class OrderServiceTest {
         OrderPayment payment = new OrderPayment(1L, 100000, 0, 5000, null);
 
         PaymentRequest request = new PaymentRequest(null, 5000);
-
-        // Mock RedissonClient and RLock
-        RLock lock = mock(RLock.class);
-        when(redissonClient.getLock(anyString())).thenReturn(lock);
-        when(lock.tryLock(anyLong(), anyLong(), any(TimeUnit.class))).thenReturn(true);
-        when(lock.isHeldByCurrentThread()).thenReturn(true);
 
         when(orderRepository.getByIdOrThrow(1L)).thenReturn(order);
         when(orderPaymentRepository.getByOrderIdOrThrow(1L)).thenReturn(payment);
@@ -190,5 +181,6 @@ class OrderServiceTest {
 
         verify(pointDomainService, times(1)).deductPoint(eq(1L), eq(5000), anyString(), eq(1L));
         verify(paymentDomainService, times(1)).completePayment(1L);
+        verify(lockExecutor).executeWithLock(anyString(), any(Supplier.class));
     }
 }

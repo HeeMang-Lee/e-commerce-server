@@ -4,15 +4,13 @@ import com.ecommerce.application.dto.*;
 import com.ecommerce.domain.entity.*;
 import com.ecommerce.domain.repository.*;
 import com.ecommerce.domain.service.*;
+import com.ecommerce.infrastructure.lock.DistributedLockExecutor;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.redisson.api.RLock;
-import org.redisson.api.RedissonClient;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.TimeUnit;
 
 /**
  * 주문 Application Facade 서비스
@@ -36,15 +34,13 @@ public class OrderService {
     private static final String LOCK_KEY_PREFIX_STOCK = "lock:stock:";
     private static final String LOCK_KEY_PREFIX_PAYMENT = "lock:payment:";
     private static final String POINT_DESCRIPTION_ORDER_PAYMENT = "주문 결제";
-    private static final long LOCK_WAIT_TIME_SECONDS = 30;
-    private static final long LOCK_LEASE_TIME_SECONDS = 10;
 
     private final UserRepository userRepository;
     private final OrderRepository orderRepository;
     private final OrderItemRepository orderItemRepository;
     private final OrderPaymentRepository orderPaymentRepository;
     private final UserCouponRepository userCouponRepository;
-    private final RedissonClient redissonClient;
+    private final DistributedLockExecutor lockExecutor;
 
     private final OrderDomainService orderDomainService;
     private final ProductDomainService productDomainService;
@@ -130,68 +126,20 @@ public class OrderService {
 
     private Product reduceStockWithLock(Long productId, int quantity) {
         String lockKey = LOCK_KEY_PREFIX_STOCK + productId;
-        RLock lock = redissonClient.getLock(lockKey);
-
-        try {
-            boolean acquired = lock.tryLock(LOCK_WAIT_TIME_SECONDS, LOCK_LEASE_TIME_SECONDS, TimeUnit.SECONDS);
-            if (!acquired) {
-                throw new IllegalStateException("재고 락 획득 실패: productId=" + productId);
-            }
-
-            return productDomainService.reduceStock(productId, quantity);
-
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new IllegalStateException("락 획득 중 인터럽트 발생", e);
-        } finally {
-            if (lock.isHeldByCurrentThread()) {
-                lock.unlock();
-            }
-        }
+        return lockExecutor.executeWithLock(lockKey,
+                () -> productDomainService.reduceStock(productId, quantity));
     }
 
     private void restoreStockWithLock(Long productId, int quantity) {
         String lockKey = LOCK_KEY_PREFIX_STOCK + productId;
-        RLock lock = redissonClient.getLock(lockKey);
-
-        try {
-            boolean acquired = lock.tryLock(LOCK_WAIT_TIME_SECONDS, LOCK_LEASE_TIME_SECONDS, TimeUnit.SECONDS);
-            if (!acquired) {
-                throw new IllegalStateException("재고 복구 락 획득 실패: productId=" + productId);
-            }
-
-            productDomainService.restoreStock(productId, quantity);
-
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new IllegalStateException("락 획득 중 인터럽트 발생", e);
-        } finally {
-            if (lock.isHeldByCurrentThread()) {
-                lock.unlock();
-            }
-        }
+        lockExecutor.executeWithLock(lockKey,
+                () -> productDomainService.restoreStock(productId, quantity));
     }
 
     public PaymentResponse processPayment(Long orderId, PaymentRequest request) {
         String lockKey = LOCK_KEY_PREFIX_PAYMENT + orderId;
-        RLock lock = redissonClient.getLock(lockKey);
-
-        try {
-            boolean acquired = lock.tryLock(LOCK_WAIT_TIME_SECONDS, LOCK_LEASE_TIME_SECONDS, TimeUnit.SECONDS);
-            if (!acquired) {
-                throw new IllegalStateException("결제 처리 락 획득 실패: orderId=" + orderId);
-            }
-
-            return executePaymentOrchestration(orderId, request);
-
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new IllegalStateException("락 획득 중 인터럽트 발생", e);
-        } finally {
-            if (lock.isHeldByCurrentThread()) {
-                lock.unlock();
-            }
-        }
+        return lockExecutor.executeWithLock(lockKey,
+                () -> executePaymentOrchestration(orderId, request));
     }
 
     private PaymentResponse executePaymentOrchestration(Long orderId, PaymentRequest request) {

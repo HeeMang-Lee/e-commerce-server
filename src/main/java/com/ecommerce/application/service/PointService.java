@@ -8,13 +8,11 @@ import com.ecommerce.domain.entity.User;
 import com.ecommerce.domain.repository.PointHistoryRepository;
 import com.ecommerce.domain.repository.UserRepository;
 import com.ecommerce.domain.service.PointDomainService;
+import com.ecommerce.infrastructure.lock.DistributedLockExecutor;
 import lombok.RequiredArgsConstructor;
-import org.redisson.api.RLock;
-import org.redisson.api.RedissonClient;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
-import java.util.concurrent.TimeUnit;
 
 /**
  * 포인트 Application Facade 서비스
@@ -33,35 +31,19 @@ import java.util.concurrent.TimeUnit;
 public class PointService {
 
     private static final String LOCK_KEY_PREFIX = "lock:point:";
-    private static final long LOCK_WAIT_TIME_SECONDS = 30;
-    private static final long LOCK_LEASE_TIME_SECONDS = 10;
 
     private final UserRepository userRepository;
     private final PointHistoryRepository pointHistoryRepository;
-    private final RedissonClient redissonClient;
+    private final DistributedLockExecutor lockExecutor;
     private final PointDomainService pointDomainService;
 
     public PointResponse chargePoint(PointChargeRequest request) {
         String lockKey = LOCK_KEY_PREFIX + request.userId();
-        RLock lock = redissonClient.getLock(lockKey);
 
-        try {
-            boolean acquired = lock.tryLock(LOCK_WAIT_TIME_SECONDS, LOCK_LEASE_TIME_SECONDS, TimeUnit.SECONDS);
-            if (!acquired) {
-                throw new IllegalStateException("포인트 충전 락 획득 실패: userId=" + request.userId());
-            }
-
+        return lockExecutor.executeWithLock(lockKey, () -> {
             int balance = pointDomainService.chargePoint(request.userId(), request.amount());
             return new PointResponse(request.userId(), balance);
-
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new IllegalStateException("락 획득 중 인터럽트 발생", e);
-        } finally {
-            if (lock.isHeldByCurrentThread()) {
-                lock.unlock();
-            }
-        }
+        });
     }
 
     public PointResponse getPoint(Long userId) {
@@ -71,25 +53,11 @@ public class PointService {
 
     public PointResponse deductPoint(Long userId, int amount, String description, Long orderId) {
         String lockKey = LOCK_KEY_PREFIX + userId;
-        RLock lock = redissonClient.getLock(lockKey);
 
-        try {
-            boolean acquired = lock.tryLock(LOCK_WAIT_TIME_SECONDS, LOCK_LEASE_TIME_SECONDS, TimeUnit.SECONDS);
-            if (!acquired) {
-                throw new IllegalStateException("포인트 차감 락 획득 실패: userId=" + userId);
-            }
-
+        return lockExecutor.executeWithLock(lockKey, () -> {
             int balance = pointDomainService.deductPoint(userId, amount, description, orderId);
             return new PointResponse(userId, balance);
-
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new IllegalStateException("락 획득 중 인터럽트 발생", e);
-        } finally {
-            if (lock.isHeldByCurrentThread()) {
-                lock.unlock();
-            }
-        }
+        });
     }
 
     public List<PointHistoryResponse> getPointHistory(Long userId) {
