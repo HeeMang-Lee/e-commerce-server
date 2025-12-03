@@ -20,11 +20,6 @@ import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/**
- * 상품 랭킹 Redis 성능 측정 테스트
- *
- * DB 기반 집계 쿼리 vs Redis Sorted Set 성능 비교
- */
 @SpringBootTest
 @ActiveProfiles("test")
 @Import(TestcontainersConfig.class)

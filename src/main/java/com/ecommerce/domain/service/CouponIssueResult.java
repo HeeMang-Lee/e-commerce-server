@@ -1,8 +1,5 @@
 package com.ecommerce.domain.service;
 
-/**
- * 쿠폰 발급 요청 결과
- */
 public enum CouponIssueResult {
 
     SUCCESS("발급 요청이 접수되었습니다"),

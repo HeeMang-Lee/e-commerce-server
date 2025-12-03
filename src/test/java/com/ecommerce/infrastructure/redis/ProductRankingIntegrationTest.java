@@ -16,11 +16,6 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/**
- * 상품 랭킹 Redis 통합 테스트
- *
- * Redis Sorted Set 기반 판매 랭킹 기능 검증
- */
 @SpringBootTest
 @ActiveProfiles("test")
 @Import(TestcontainersConfig.class)

@@ -16,16 +16,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-/**
- * 쿠폰 발급 대기열 처리 스케줄러
- *
- * Redis 대기열에서 발급 요청을 가져와 DB에 벌크 저장합니다.
- *
- * 처리 전략:
- * - 5초마다 실행 (fixedDelay)
- * - 한 번에 최대 100건 처리 (벌크 Insert)
- * - 쿠폰별로 그룹화하여 쿠폰 정보 조회 최소화
- */
 @Slf4j
 @Component
 @RequiredArgsConstructor
@@ -37,9 +27,6 @@ public class CouponQueueProcessor {
 
     private static final int BATCH_SIZE = 100;
 
-    /**
-     * 대기열 처리 (5초마다 실행)
-     */
     @Scheduled(fixedDelay = 5000)
     @Transactional
     public void processQueue() {
@@ -51,14 +38,12 @@ public class CouponQueueProcessor {
 
         log.info("쿠폰 대기열 처리 시작: {}건", queueItems.size());
 
-        // couponId:userId 형식 파싱
         List<CouponIssueData> issueDataList = parseQueueItems(queueItems);
 
         if (issueDataList.isEmpty()) {
             return;
         }
 
-        // 쿠폰별로 그룹화
         Map<Long, List<CouponIssueData>> groupedByCoupon = issueDataList.stream()
                 .collect(Collectors.groupingBy(CouponIssueData::couponId));
 
@@ -82,9 +67,6 @@ public class CouponQueueProcessor {
         log.info("쿠폰 대기열 처리 완료: 성공={}, 실패={}", successCount, failCount);
     }
 
-    /**
-     * 쿠폰별 배치 처리
-     */
     private int processCouponBatch(Long couponId, List<CouponIssueData> userList) {
         Coupon coupon = couponRepository.findById(couponId).orElse(null);
         if (coupon == null) {
@@ -96,7 +78,6 @@ public class CouponQueueProcessor {
         List<UserCoupon> userCoupons = new ArrayList<>();
 
         for (CouponIssueData data : userList) {
-            // 이미 DB에 존재하는지 확인 (멱등성)
             boolean exists = userCouponRepository
                     .findByUserIdAndCouponId(data.userId(), couponId)
                     .isPresent();
@@ -110,7 +91,6 @@ public class CouponQueueProcessor {
         if (!userCoupons.isEmpty()) {
             userCouponRepository.saveAll(userCoupons);
 
-            // 쿠폰 발급 수량 업데이트
             for (int i = 0; i < userCoupons.size(); i++) {
                 coupon.issue();
             }
@@ -122,9 +102,6 @@ public class CouponQueueProcessor {
         return userCoupons.size();
     }
 
-    /**
-     * 대기열 아이템 파싱
-     */
     private List<CouponIssueData> parseQueueItems(List<String> items) {
         List<CouponIssueData> result = new ArrayList<>();
 
@@ -144,9 +121,6 @@ public class CouponQueueProcessor {
         return result;
     }
 
-    /**
-     * 대기열 크기 조회 (모니터링용)
-     */
     public long getQueueSize() {
         return couponRedisRepository.getQueueSize();
     }

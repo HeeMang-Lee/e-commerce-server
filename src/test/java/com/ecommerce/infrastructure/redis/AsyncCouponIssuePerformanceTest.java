@@ -25,11 +25,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/**
- * Redis 기반 비동기 쿠폰 발급 성능 측정 테스트
- *
- * 기존 방식(분산락 + DB)과 비교하기 위한 성능 Baseline 측정
- */
 @SpringBootTest
 @ActiveProfiles("test")
 @Import(TestcontainersConfig.class)

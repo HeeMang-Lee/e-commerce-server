@@ -24,16 +24,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/**
- * 쿠폰 발급 성능 측정 테스트
- *
- * 목적: Redis 기반 비동기 방식 도입 전후 성능 비교를 위한 Baseline 측정
- *
- * 측정 항목:
- * - 총 처리 시간 (ms)
- * - 처리량 (requests/sec)
- * - 성공/실패 건수
- */
 @SpringBootTest
 @ActiveProfiles("test")
 @Import(TestcontainersConfig.class)

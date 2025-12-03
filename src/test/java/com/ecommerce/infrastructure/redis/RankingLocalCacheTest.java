@@ -16,14 +16,6 @@ import org.testcontainers.utility.DockerImageName;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/**
- * 버전 기반 캐시 일관성 테스트 (올리브영 스타일)
- *
- * 테스트 시나리오:
- * 1. 버전 조회/증가 동작 확인
- * 2. 버전 증가 시 캐시 키 변경 확인
- * 3. 성능 측정
- */
 @SpringBootTest
 @ActiveProfiles("test")
 @Import(TestcontainersConfig.class)
