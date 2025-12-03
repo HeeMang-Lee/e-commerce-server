@@ -6,7 +6,7 @@
 
 ---
 
-## 1. 선착순 쿠폰, 왜 Redis였나
+## 1. 선착순 쿠폰, Redis 자료구조 활용
 
 ### 기존 방식의 한계
 
@@ -30,12 +30,16 @@
 핵심은 "일단 빠르게 응답하고, DB 저장은 나중에"였다.
 
 ```
-요청 → Redis Set 검증 → 대기열 추가 → 즉시 응답
-        ↓
-      스케줄러 → 벌크 DB Insert
+┌─────────┐     ┌─────────────┐     ┌───────┐
+│ Client  │────▶│  API Server │────▶│ Redis │
+└─────────┘     └──────┬──────┘     └───────┘
+                       │
+                ┌──────▼──────┐     ┌───────┐
+                │  Scheduler  │────▶│ MySQL │
+                └─────────────┘     └───────┘
 ```
 
-Redis Set으로 중복 체크(SISMEMBER)하고, 통과하면 List에 넣고 바로 응답한다. DB 저장은 스케줄러가 5초마다 100건씩 처리한다.
+Redis Set으로 중복 체크하고, 통과하면 List에 넣고 바로 응답한다. DB 저장은 스케줄러가 5초마다 100건씩 처리한다.
 
 | 테스트 케이스 | 기존 | Redis 방식 | 개선 |
 |-------------|------|-----------|------|
@@ -44,25 +48,29 @@ Redis Set으로 중복 체크(SISMEMBER)하고, 통과하면 List에 넣고 바�
 
 처리량이 47 req/s에서 256 req/s로 뛰었다.
 
-### 자료구조 선택
+### 자료구조 선택: Set + List
 
-멘토링에서 "Redis는 자료구조 선택이 절반"이라는 얘기를 들었다. 쿠폰 발급엔 두 가지가 필요했다.
+Redis는 자료구조 선택이 절반이다.
 
-**Set** - 누가 발급받았는지
+**Step 1: Set으로 검증**
 ```
 coupon:1:issued = {user1, user2, user3, ...}
 ```
-- 중복 체크: SISMEMBER → O(1)
-- 발급 수량: SCARD → O(1)
+- SCARD: 현재 발급된 수량 확인 (한정 수량 체크)
+- SADD: 중복 발급 방지 (이미 발급받은 사용자 체크)
 
-**List** - DB 저장 대기열
+**Step 2: 대기열에 추가**
 ```
 coupon:queue = ["1:user1", "1:user2", ...]
 ```
-- 추가: RPUSH → O(1)
-- 처리: LPOP → O(1)
+- 검증 통과 시 List에 추가 (RPUSH)
+- 스케줄러가 LPOP으로 꺼내서 DB에 저장
 
-처음엔 "수량 제한을 어떻게 원자적으로 처리하지?" 고민했는데, SADD 후 SCARD로 확인하고 초과하면 SREM으로 롤백하는 방식으로 해결했다.
+### 분산락이 필요한가?
+
+**불필요하다.** INCR, DECR, SADD 등은 모두 원자적 연산이다. 이런 연산을 하겠다고 따로 분산락을 걸 필요 없다.
+
+기존에 분산락을 썼던 건 DB 트랜잭션 때문이었다. Redis 원자적 연산으로 대체하면 락 없이도 동시성 문제가 해결된다.
 
 ---
 
@@ -81,6 +89,51 @@ ranking:daily:20251203 = {상품1: 50, 상품2: 30, 상품3: 10}
 - 판매 기록: ZINCRBY → O(log N)
 - Top 5 조회: ZREVRANGE → O(log N + 5)
 - 3일 합산: ZUNIONSTORE → O(N)
+
+### ZUNIONSTORE는 언제 호출하나?
+
+3일치 데이터를 합산하는 ZUNIONSTORE를 언제 호출할지 고민했다.
+
+**방법 1: 조회할 때마다** - 비효율적. 같은 결과를 반복 계산한다.
+
+**방법 2: 배치로 미리 합산** - 결과를 어디에 저장하지? 또 다른 키가 필요하다.
+
+**선택한 방법: 조회 시 합산 + 로컬 캐시**
+
+```
+조회 요청 → 로컬 캐시 확인 → 없으면 ZUNIONSTORE → 캐시 저장
+```
+
+ZUNIONSTORE 결과는 임시 키에 저장했다가 바로 삭제한다. 어차피 로컬 캐시에 올라가니까 Redis에 남길 필요 없다.
+
+```java
+redisTemplate.opsForZSet().unionAndStore(keys.get(0), keys.subList(1, keys.size()), COMBINED_KEY);
+Set<TypedTuple<String>> result = redisTemplate.opsForZSet().reverseRangeWithScores(COMBINED_KEY, 0, limit - 1);
+redisTemplate.delete(COMBINED_KEY);  // 임시 키 삭제
+return result;
+```
+
+### 상품 정보 조회 - MGET 활용
+
+랭킹에서 상품 ID 목록을 가져온 후, 상품 상세 정보가 필요하다. 이때 N번 조회하면 N번의 네트워크 왕복이 발생한다.
+
+```java
+// Bad: N번 왕복
+for (Long id : productIds) {
+    Product p = productRepository.findById(id);
+}
+
+// Good: 1번 왕복
+List<Product> products = productRepository.findAllById(productIds);
+```
+
+Redis에서도 마찬가지다. 상품 정보를 Redis에 캐싱한다면 MGET으로 한 번에 조회한다.
+
+```
+MGET product:1 product:2 product:3 product:4 product:5
+```
+
+5개 상품을 5번 GET 하면 5ms, MGET으로 한 번에 하면 1ms. 단순하지만 효과적이다.
 
 성능 측정 결과:
 - 판매 기록: 2,743 ops/sec
@@ -120,6 +173,27 @@ Redis: ranking:version = 3
 
 버전이 바뀌면 새 캐시 키로 조회하니까 자연스럽게 무효화된다. Pub/Sub 유실 걱정도 없다.
 
+### 버전 증가 타이밍
+
+버전을 언제 올릴지도 고민이었다.
+
+**판매마다 올리면?** - 캐시 효과가 없다. 매번 새 키로 조회하니까.
+
+**명시적 호출만?** - 관리자가 일일이 호출해야 한다. 비현실적이다.
+
+**선택한 방법: 스케줄러 + 명시적 호출**
+
+```java
+@Scheduled(cron = "0 */10 * * * *")  // 10분마다
+public void refreshRankingVersion() {
+    rankingRedisRepository.incrementVersion();
+}
+```
+
+기본적으로 10분마다 버전을 올린다. "3일간 인기 상품"은 1-2건 판매로 순위가 크게 바뀌지 않으니 10분 주기면 충분하다.
+
+추가로 명시적 호출 API도 열어둔다. 대규모 프로모션 종료 후 즉시 반영이 필요할 때 사용한다.
+
 ### TTL 설정
 
 올리브영은 TTL 60초를 썼다. 근데 우리 서비스는 "3일간 인기 상품"이다. 1-2건 팔린다고 순위가 확 바뀌진 않는다.
@@ -134,7 +208,7 @@ public static final int CACHE_TTL_SECONDS = 600;  // 10분
 
 ### Self-Invocation 문제
 
-`@Cacheable`이 동작 안 해서 한참 삽질했다.
+`@Cacheable`이 동작하지 않는 문제가 있었다.
 
 ```java
 public List<ProductResponse> getTopProducts(int limit) {
@@ -143,7 +217,7 @@ public List<ProductResponse> getTopProducts(int limit) {
 }
 ```
 
-같은 클래스 내부 호출은 AOP 프록시를 안 탄다. `@Lazy` self-injection으로 해결했다.
+같은 클래스 내부 호출은 AOP 프록시를 타지 않는다. `@Lazy` self-injection으로 해결했다.
 
 ```java
 private final ProductRankingService self;
@@ -158,13 +232,53 @@ public List<ProductResponse> getTopProducts(int limit) {
 }
 ```
 
+**대안들:**
+- 캐시 로직을 별도 클래스로 분리 (더 깔끔하지만 클래스가 늘어남)
+- `CacheManager`를 직접 주입해서 수동 처리 (유연하지만 보일러플레이트 증가)
+
+self-injection이 약간 트릭 같긴 한데, 기존 구조를 크게 안 바꿔도 돼서 선택했다.
+
 ---
 
-## 3. 배운 것들
+## 3. 장애 대응
+
+### Redis 장애 시
+
+Redis 연결 실패하면 DB로 fallback한다.
+
+```java
+try {
+    return rankingRedisRepository.getTopProductsLast3Days(limit);
+} catch (Exception e) {
+    log.warn("Redis 조회 실패, DB Fallback: {}", e.getMessage());
+    return getTopProductsFromDB(limit);
+}
+```
+
+쿠폰 발급도 마찬가지. Redis 장애 시엔 기존 분산락 방식으로 돌아가게 해두면 서비스는 느려도 유지된다.
+
+### 모니터링 포인트
+
+운영 시 봐야 할 지표들:
+- Redis 커넥션 풀 사용률
+- 대기열(coupon:queue) 길이 - 급격히 늘면 스케줄러 문제
+- 캐시 히트율 - 낮으면 TTL이나 키 전략 재검토
+- 버전 증가 빈도 - 너무 잦으면 캐시 효과 감소
+
+---
+
+## 4. 배운 것들
 
 **Redis 자료구조 선택이 설계의 절반이다**
-- 쿠폰: Set(중복방지) + List(대기열)
+- 쿠폰: Set(중복방지 + 수량체크) + List(대기열)
 - 랭킹: Sorted Set(점수 기반 정렬)
+
+**Redis 원자적 연산으로 분산락 대체**
+- SCARD, SADD 등은 원자적 연산
+- 별도 분산락 없이 동시성 문제 해결
+
+**배치 조회는 MGET으로**
+- N번 왕복 vs 1번 왕복, 단순하지만 효과적
 
 **캐시 일관성은 단순하게**
 - Pub/Sub보다 버전 기반이 더 안정적인 경우도 있다
@@ -174,12 +288,12 @@ public List<ProductResponse> getTopProducts(int limit) {
 - "천천히 변하는 데이터"는 TTL을 길게 가져가도 된다
 
 **Spring AOP의 self-invocation 함정**
-- 같은 클래스 내부 호출은 프록시를 안 탄다
+- 같은 클래스 내부 호출은 프록시를 타지 않는다
 - `@Lazy` self-injection이나 별도 클래스 분리로 해결
 
 ---
 
-## 4. 성능 요약
+## 5. 성능 요약
 
 ### 쿠폰 발급
 | 지표 | 기존 (분산락+DB) | Redis 비동기 |
@@ -201,4 +315,11 @@ public List<ProductResponse> getTopProducts(int limit) {
 
 "Redis 쓰면 빨라진다"는 말은 많이 들었는데, 직접 측정해보니 체감이 달랐다. 단순히 빠른 게 아니라, 아키텍처 자체가 바뀌면서 병목이 해소되는 느낌이었다.
 
-다음엔 Redis Cluster 환경에서의 동작이나, 실제 프로덕션 레벨의 모니터링도 고민해보고 싶다.
+---
+
+## References
+
+- [Redis 공식 문서 - Data types](https://redis.io/docs/data-types/)
+- [Redis 공식 문서 - Sorted Sets](https://redis.io/docs/data-types/sorted-sets/)
+- [올리브영 - 선물하기 프로모션 적용기: 멀티 레이어 캐시](https://oliveyoung.tech/2024-12-10/present-promotion-multi-layer-cache/)
+- [카카오페이증권 - Redis on Kubernetes](https://tech.kakaopay.com/post/kakaopaysec-redis-on-kubernetes/)
