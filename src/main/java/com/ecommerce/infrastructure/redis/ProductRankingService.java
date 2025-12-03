@@ -1,37 +1,28 @@
 package com.ecommerce.infrastructure.redis;
 
 import com.ecommerce.application.dto.ProductResponse;
-import com.ecommerce.config.CaffeineCacheConfig;
 import com.ecommerce.domain.entity.Product;
 import com.ecommerce.domain.repository.PopularProductRepository;
 import com.ecommerce.domain.repository.ProductRepository;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.cache.annotation.Cacheable;
-import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
+@RequiredArgsConstructor
 public class ProductRankingService {
 
     private final ProductRankingRedisRepository rankingRedisRepository;
+    private final ProductRankingCacheService cacheService;
     private final ProductRepository productRepository;
     private final PopularProductRepository popularProductRepository;
-    private final ProductRankingService self;
-
-    public ProductRankingService(
-            ProductRankingRedisRepository rankingRedisRepository,
-            ProductRepository productRepository,
-            PopularProductRepository popularProductRepository,
-            @Lazy ProductRankingService self) {
-        this.rankingRedisRepository = rankingRedisRepository;
-        this.productRepository = productRepository;
-        this.popularProductRepository = popularProductRepository;
-        this.self = self;
-    }
 
     public void recordSale(Long productId, int quantity) {
         try {
@@ -44,30 +35,11 @@ public class ProductRankingService {
 
     public List<ProductResponse> getTopProducts(int limit) {
         long version = rankingRedisRepository.getCurrentVersion();
-        return self.getTopProductsByVersion(limit, version);
-    }
-
-    @Cacheable(value = CaffeineCacheConfig.RANKING_CACHE, key = "#limit + '_' + #version")
-    public List<ProductResponse> getTopProductsByVersion(int limit, long version) {
-        log.debug("캐시 미스 - Redis 조회: limit={}, version={}", limit, version);
 
         try {
-            List<Long> productIds = rankingRedisRepository.getTopProductsLast3Days(limit);
-
-            if (!productIds.isEmpty()) {
-                log.debug("Redis에서 인기 상품 조회: {} 건", productIds.size());
-                return productIds.stream()
-                        .map(id -> {
-                            try {
-                                Product product = productRepository.getByIdOrThrow(id);
-                                return ProductResponse.from(product);
-                            } catch (Exception e) {
-                                log.warn("상품 조회 실패: productId={}", id);
-                                return null;
-                            }
-                        })
-                        .filter(p -> p != null)
-                        .toList();
+            List<ProductResponse> cached = cacheService.getTopProductsByVersion(limit, version);
+            if (!cached.isEmpty()) {
+                return cached;
             }
         } catch (Exception e) {
             log.warn("Redis 랭킹 조회 실패, DB Fallback: error={}", e.getMessage());
@@ -82,11 +54,19 @@ public class ProductRankingService {
 
         List<Long> topProductIds = popularProductRepository.getTopProductIds(startTime, endTime, limit);
 
+        if (topProductIds.isEmpty()) {
+            return List.of();
+        }
+
+        List<Product> products = productRepository.findAllById(topProductIds);
+
+        Map<Long, Product> productMap = products.stream()
+                .collect(Collectors.toMap(Product::getId, Function.identity()));
+
         return topProductIds.stream()
-                .map(id -> {
-                    Product product = productRepository.getByIdOrThrow(id);
-                    return ProductResponse.from(product);
-                })
+                .map(productMap::get)
+                .filter(p -> p != null)
+                .map(ProductResponse::from)
                 .toList();
     }
 

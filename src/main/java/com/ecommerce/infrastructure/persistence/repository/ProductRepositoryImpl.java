@@ -32,6 +32,11 @@ public class ProductRepositoryImpl implements ProductRepository {
     }
 
     @Override
+    public List<Product> findAllById(List<Long> ids) {
+        return jpaProductRepository.findAllById(ids);
+    }
+
+    @Override
     public void deleteAll() {
         jpaProductRepository.deleteAll();
     }
