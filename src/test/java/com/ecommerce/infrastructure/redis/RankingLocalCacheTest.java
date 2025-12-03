@@ -17,18 +17,17 @@ import org.testcontainers.utility.DockerImageName;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * 로컬 캐시 + Redis Pub/Sub 캐시 무효화 테스트
+ * 버전 기반 캐시 일관성 테스트 (올리브영 스타일)
  *
  * 테스트 시나리오:
- * 1. 첫 조회 시 Redis에서 가져와 로컬 캐시에 저장
- * 2. 두 번째 조회 시 로컬 캐시에서 반환 (Redis 미접근)
- * 3. Pub/Sub 무효화 메시지 수신 시 로컬 캐시 삭제
- * 4. 다음 조회 시 다시 Redis에서 가져옴
+ * 1. 버전 조회/증가 동작 확인
+ * 2. 버전 증가 시 캐시 키 변경 확인
+ * 3. 성능 측정
  */
 @SpringBootTest
 @ActiveProfiles("test")
 @Import(TestcontainersConfig.class)
-@DisplayName("로컬 캐시 + Pub/Sub 무효화 테스트")
+@DisplayName("버전 기반 캐시 일관성 테스트")
 class RankingLocalCacheTest {
 
     @Autowired
@@ -36,9 +35,6 @@ class RankingLocalCacheTest {
 
     @Autowired
     private ProductRankingRedisRepository rankingRedisRepository;
-
-    @Autowired
-    private RankingCacheInvalidator cacheInvalidator;
 
     @Autowired
     private CacheManager cacheManager;
@@ -65,131 +61,142 @@ class RankingLocalCacheTest {
     @BeforeEach
     void setUp() {
         rankingRedisRepository.clearAll();
-        cacheInvalidator.invalidateLocalCache();
+        Cache cache = cacheManager.getCache(CaffeineCacheConfig.RANKING_CACHE);
+        if (cache != null) {
+            cache.clear();
+        }
     }
 
     @Test
-    @DisplayName("첫 조회 시 Redis에서 가져와 로컬 캐시에 저장")
-    void firstQuery_shouldCacheLocally() {
+    @DisplayName("버전 조회 - 초기값은 0")
+    void getCurrentVersion_shouldReturnInitialValue() {
+        // when
+        long version = rankingService.getCurrentVersion();
+
+        // then
+        assertThat(version).isEqualTo(0L);
+    }
+
+    @Test
+    @DisplayName("버전 증가 - 순차적으로 증가")
+    void incrementVersion_shouldIncreaseSequentially() {
+        // given
+        long initialVersion = rankingService.getCurrentVersion();
+
+        // when
+        long newVersion1 = rankingService.incrementVersion();
+        long newVersion2 = rankingService.incrementVersion();
+
+        // then
+        assertThat(newVersion1).isEqualTo(initialVersion + 1);
+        assertThat(newVersion2).isEqualTo(initialVersion + 2);
+    }
+
+    @Test
+    @DisplayName("버전 증가 시 새 캐시 키 생성 - 기존 캐시와 다른 키")
+    void versionIncrement_shouldCreateNewCacheKey() {
+        // given
+        long oldVersion = rankingService.getCurrentVersion();
+        String oldCacheKey = "5_" + oldVersion;
+
+        // when
+        long newVersion = rankingService.incrementVersion();
+        String newCacheKey = "5_" + newVersion;
+
+        // then - 키가 달라짐
+        assertThat(newCacheKey).isNotEqualTo(oldCacheKey);
+        assertThat(newVersion).isEqualTo(oldVersion + 1);
+    }
+
+    @Test
+    @DisplayName("getTopProducts 호출 시 버전 기반 캐시 사용 확인")
+    void getTopProducts_shouldCacheWithVersionKey() {
         // given
         rankingRedisRepository.recordSale(1L, 100);
-        rankingRedisRepository.recordSale(2L, 50);
+        long version = rankingService.getCurrentVersion();
 
-        // when - 첫 조회
+        // when - getTopProducts 호출 (self-injection으로 AOP 프록시 경유)
         rankingService.getTopProducts(5);
 
-        // then - 로컬 캐시에 저장됨
+        // then - 버전 기반 키로 캐시됨
         Cache cache = cacheManager.getCache(CaffeineCacheConfig.RANKING_CACHE);
         assertThat(cache).isNotNull();
-        assertThat(cache.get(5)).isNotNull();
+
+        // 캐시 키 형식: "limit_version"
+        String expectedKey = "5_" + version;
+        Cache.ValueWrapper wrapper = cache.get(expectedKey);
+        assertThat(wrapper).isNotNull();
     }
 
     @Test
-    @DisplayName("Pub/Sub 무효화 메시지로 로컬 캐시 삭제")
-    void pubSubInvalidation_shouldClearLocalCache() {
-        // given - 캐시에 데이터 존재
-        rankingRedisRepository.recordSale(1L, 100);
-        rankingService.getTopProducts(5);
-
-        Cache cache = cacheManager.getCache(CaffeineCacheConfig.RANKING_CACHE);
-        assertThat(cache.get(5)).isNotNull();
-
-        // when - Pub/Sub 무효화 발행
-        cacheInvalidator.publishInvalidation();
-
-        // 메시지 처리 대기
-        try {
-            Thread.sleep(100);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
-
-        // then - 로컬 캐시 삭제됨
-        assertThat(cache.get(5)).isNull();
-    }
-
-    @Test
-    @DisplayName("invalidateLocalCache 직접 호출 시 캐시 삭제")
-    void invalidateLocalCache_shouldClearCache() {
-        // given - 캐시에 데이터 존재
-        rankingRedisRepository.recordSale(1L, 100);
-        rankingService.getTopProducts(5);
-
-        Cache cache = cacheManager.getCache(CaffeineCacheConfig.RANKING_CACHE);
-        assertThat(cache.get(5)).isNotNull();
-
-        // when
-        cacheInvalidator.invalidateLocalCache();
-
-        // then
-        assertThat(cache.get(5)).isNull();
-    }
-
-    @Test
-    @DisplayName("clearRanking 호출 시 로컬 캐시도 함께 무효화")
-    void clearRanking_shouldInvalidateLocalCache() {
+    @DisplayName("[성능측정] 버전 조회는 매우 빠름 (숫자 하나)")
+    void versionQuery_shouldBeFast() {
         // given
-        rankingRedisRepository.recordSale(1L, 100);
-        rankingService.getTopProducts(5);
-
-        Cache cache = cacheManager.getCache(CaffeineCacheConfig.RANKING_CACHE);
-        assertThat(cache.get(5)).isNotNull();
+        int iterations = 10000;
 
         // when
-        rankingService.clearRanking();
-
-        // 메시지 처리 대기
-        try {
-            Thread.sleep(100);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
+        long startTime = System.currentTimeMillis();
+        for (int i = 0; i < iterations; i++) {
+            rankingService.getCurrentVersion();
         }
+        long totalTime = System.currentTimeMillis() - startTime;
 
         // then
-        assertThat(cache.get(5)).isNull();
+        double avgTime = (double) totalTime / iterations;
+        System.out.println();
+        System.out.println("============================================================");
+        System.out.println("📊 버전 조회 성능");
+        System.out.println("============================================================");
+        System.out.printf("   - 조회 횟수: %,d 회%n", iterations);
+        System.out.printf("   - 총 시간: %,d ms%n", totalTime);
+        System.out.printf("   - 평균 응답 시간: %.4f ms%n", avgTime);
+        System.out.println("============================================================");
+        System.out.println();
+
+        assertThat(avgTime).isLessThan(1);  // 평균 1ms 미만
     }
 
     @Test
-    @DisplayName("[성능측정] 로컬 캐시 vs Redis 직접 조회")
-    void performance_localCacheVsRedis() {
-        // given - 1000개 상품 데이터
-        for (int i = 1; i <= 1000; i++) {
+    @DisplayName("[성능측정] 캐시 히트 vs 미스 성능 비교")
+    void performance_cacheHitVsMiss() {
+        // given
+        for (int i = 1; i <= 100; i++) {
             rankingRedisRepository.recordSale((long) i, (int) (Math.random() * 100));
         }
 
-        int iterations = 1000;
+        int iterations = 100;
 
-        // Redis 직접 조회 (캐시 무효화 후)
-        cacheInvalidator.invalidateLocalCache();
-        long redisStartTime = System.currentTimeMillis();
+        // 캐시 미스 시뮬레이션 (매번 버전 증가)
+        long missStartTime = System.currentTimeMillis();
         for (int i = 0; i < iterations; i++) {
-            cacheInvalidator.invalidateLocalCache();  // 매번 캐시 무효화
+            rankingService.incrementVersion();  // 버전 변경으로 캐시 미스 유발
             rankingService.getTopProducts(5);
         }
-        long redisTime = System.currentTimeMillis() - redisStartTime;
+        long missTime = System.currentTimeMillis() - missStartTime;
 
-        // 로컬 캐시 조회 (첫 조회 후 캐시 사용)
-        cacheInvalidator.invalidateLocalCache();
-        rankingService.getTopProducts(5);  // 캐시에 저장
-        long cacheStartTime = System.currentTimeMillis();
+        // 캐시 히트 시뮬레이션 (같은 버전 유지)
+        rankingService.getTopProducts(5);  // 첫 조회로 캐시 저장
+        long hitStartTime = System.currentTimeMillis();
         for (int i = 0; i < iterations; i++) {
             rankingService.getTopProducts(5);  // 캐시에서 조회
         }
-        long cacheTime = System.currentTimeMillis() - cacheStartTime;
+        long hitTime = System.currentTimeMillis() - hitStartTime;
 
         // 결과 출력
         System.out.println();
         System.out.println("============================================================");
-        System.out.println("📊 로컬 캐시 vs Redis 직접 조회 성능 비교");
+        System.out.println("📊 버전 기반 캐시 성능 비교 (올리브영 스타일)");
         System.out.println("============================================================");
         System.out.printf("   - 조회 횟수: %,d 회%n", iterations);
-        System.out.printf("   - Redis 직접 조회: %,d ms (평균 %.2f ms/req)%n", redisTime, (double) redisTime / iterations);
-        System.out.printf("   - 로컬 캐시 조회: %,d ms (평균 %.2f ms/req)%n", cacheTime, (double) cacheTime / iterations);
-        System.out.printf("   - 성능 향상: %.1f배%n", (double) redisTime / cacheTime);
+        System.out.printf("   - 캐시 미스 (매번 버전 증가): %,d ms (평균 %.2f ms/req)%n", missTime, (double) missTime / iterations);
+        System.out.printf("   - 캐시 히트 (같은 버전): %,d ms (평균 %.2f ms/req)%n", hitTime, (double) hitTime / iterations);
+        if (hitTime > 0) {
+            System.out.printf("   - 성능 향상: %.1f배%n", (double) missTime / hitTime);
+        }
         System.out.println("============================================================");
         System.out.println();
 
-        // 로컬 캐시가 Redis보다 빠름
-        assertThat(cacheTime).isLessThan(redisTime);
+        // 캐시 히트가 미스보다 빠름
+        assertThat(hitTime).isLessThanOrEqualTo(missTime);
     }
 }

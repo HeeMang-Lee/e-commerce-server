@@ -15,6 +15,10 @@ import java.util.stream.Collectors;
 /**
  * 상품 판매 랭킹을 위한 Redis Repository
  *
+ * 버전 기반 캐시 일관성 패턴 (올리브영 스타일):
+ * - ranking:version → 현재 버전 번호
+ * - 버전 증가 시 모든 서버의 로컬 캐시가 자연스럽게 무효화됨
+ *
  * Redis 자료구조: Sorted Set (ZSET)
  * - Key: ranking:daily:{yyyyMMdd} (일별 랭킹)
  * - Score: 판매 수량
@@ -34,6 +38,7 @@ public class ProductRankingRedisRepository {
 
     private static final String DAILY_RANKING_PREFIX = "ranking:daily:";
     private static final String COMBINED_RANKING_KEY = "ranking:combined:3days";
+    private static final String VERSION_KEY = "ranking:version";
     private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ofPattern("yyyyMMdd");
     private static final Duration DAILY_KEY_TTL = Duration.ofDays(4);  // 3일 + 여유 1일
 
@@ -146,6 +151,31 @@ public class ProductRankingRedisRepository {
             redisTemplate.delete(keys);
         }
         redisTemplate.delete(COMBINED_RANKING_KEY);
+        redisTemplate.delete(VERSION_KEY);
+    }
+
+    /**
+     * 현재 랭킹 버전 조회
+     *
+     * @return 현재 버전 (없으면 0)
+     */
+    public long getCurrentVersion() {
+        String version = redisTemplate.opsForValue().get(VERSION_KEY);
+        return version != null ? Long.parseLong(version) : 0L;
+    }
+
+    /**
+     * 랭킹 버전 증가
+     * 호출 시 모든 서버의 로컬 캐시가 자연스럽게 무효화됨 (새 버전 키로 조회)
+     *
+     * Redis INCR: 키 없으면 0에서 시작하여 1 반환
+     *
+     * @return 증가된 버전
+     */
+    public long incrementVersion() {
+        Long newVersion = redisTemplate.opsForValue().increment(VERSION_KEY);
+        log.info("랭킹 버전 증가: {}", newVersion);
+        return newVersion != null ? newVersion : 1L;
     }
 
     private String getDailyKey(LocalDate date) {
