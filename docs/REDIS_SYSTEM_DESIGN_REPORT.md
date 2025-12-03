@@ -204,7 +204,7 @@ TTL을 10분으로 늘렸다. 로컬 캐시 히트율이 올라가고 Redis 부�
 public static final int CACHE_TTL_SECONDS = 600;  // 10분
 ```
 
-데이터 특성에 맞게 TTL을 조정하는 게 중요하다는 걸 배웠다.
+TTL은 데이터 특성에 맞춰야 한다. 당연한 얘기 같지만 직접 겪어보니 와닿았다.
 
 ### Self-Invocation 문제
 
@@ -217,26 +217,25 @@ public List<ProductResponse> getTopProducts(int limit) {
 }
 ```
 
-같은 클래스 내부 호출은 AOP 프록시를 타지 않는다. `@Lazy` self-injection으로 해결했다.
+같은 클래스 내부 호출은 AOP 프록시를 타지 않는다. Spring AOP는 프록시 기반이라 `this.method()` 호출은 프록시를 우회한다.
+
+처음엔 `@Lazy` self-injection을 고려했다. 근데 트릭 같은 느낌이 들었다. 결국 캐시 로직을 별도 클래스로 분리했다.
 
 ```java
-private final ProductRankingService self;
-
-public ProductRankingService(..., @Lazy ProductRankingService self) {
-    this.self = self;
+// ProductRankingCacheService.java
+@Cacheable(value = "ranking", key = "#limit + '_' + #version")
+public List<ProductResponse> getTopProductsByVersion(int limit, long version) {
+    // Redis 조회 + 상품 정보 매핑
 }
 
+// ProductRankingService.java
 public List<ProductResponse> getTopProducts(int limit) {
     long version = getCurrentVersion();
-    return self.getTopProductsByVersion(limit, version);  // 프록시 경유
+    return cacheService.getTopProductsByVersion(limit, version);  // 다른 빈 호출
 }
 ```
 
-**대안들:**
-- 캐시 로직을 별도 클래스로 분리 (더 깔끔하지만 클래스가 늘어남)
-- `CacheManager`를 직접 주입해서 수동 처리 (유연하지만 보일러플레이트 증가)
-
-self-injection이 약간 트릭 같긴 한데, 기존 구조를 크게 안 바꿔도 돼서 선택했다.
+클래스가 하나 늘긴 했는데, 역할 분리가 명확해졌다. `ProductRankingService`는 조회 로직, `ProductRankingCacheService`는 캐시 처리. 오히려 나아진 것 같다.
 
 ---
 
@@ -289,7 +288,7 @@ try {
 
 **Spring AOP의 self-invocation 함정**
 - 같은 클래스 내부 호출은 프록시를 타지 않는다
-- `@Lazy` self-injection이나 별도 클래스 분리로 해결
+- 별도 클래스로 분리하면 깔끔하게 해결된다
 
 ---
 
@@ -313,7 +312,7 @@ try {
 
 ## 마치며
 
-"Redis 쓰면 빨라진다"는 말은 많이 들었는데, 직접 측정해보니 체감이 달랐다. 단순히 빠른 게 아니라, 아키텍처 자체가 바뀌면서 병목이 해소되는 느낌이었다.
+"Redis 쓰면 빨라진다"는 말은 많이 들었다. 직접 해보니까 빠른 거 맞았다. 근데 단순히 "빠르다"가 아니었다. 아키텍처가 바뀌면서 병목 자체가 사라지는 느낌이었다. 락 대기 시간이 없어지고, DB 부하가 줄어들고.
 
 ---
 
