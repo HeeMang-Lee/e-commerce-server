@@ -34,9 +34,8 @@ public class ProductRankingService {
     }
 
     public List<ProductResponse> getTopProducts(int limit) {
-        long version = rankingRedisRepository.getCurrentVersion();
-
         try {
+            long version = rankingRedisRepository.getCurrentVersion();
             List<ProductResponse> cached = cacheService.getTopProductsByVersion(limit, version);
             if (!cached.isEmpty()) {
                 return cached;
