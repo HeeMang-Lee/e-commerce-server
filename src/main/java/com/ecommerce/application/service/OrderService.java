@@ -5,6 +5,7 @@ import com.ecommerce.domain.entity.*;
 import com.ecommerce.domain.repository.*;
 import com.ecommerce.domain.service.*;
 import com.ecommerce.infrastructure.lock.DistributedLockExecutor;
+import com.ecommerce.infrastructure.redis.ProductRankingService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -47,6 +48,7 @@ public class OrderService {
     private final PointDomainService pointDomainService;
     private final CouponDomainService couponDomainService;
     private final PaymentDomainService paymentDomainService;
+    private final ProductRankingService productRankingService;
 
     public OrderResponse createOrder(OrderRequest request) {
         User user = userRepository.getByIdOrThrow(request.userId());
@@ -136,6 +138,19 @@ public class OrderService {
                 () -> productDomainService.restoreStock(productId, quantity));
     }
 
+    private void recordSalesForRanking(Long orderId) {
+        try {
+            List<OrderItem> orderItems = orderItemRepository.findByOrderId(orderId);
+            for (OrderItem item : orderItems) {
+                productRankingService.recordSale(item.getProductId(), item.getQuantity());
+            }
+            log.debug("판매 기록 완료: orderId={}, items={}", orderId, orderItems.size());
+        } catch (Exception e) {
+            // Redis 기록 실패해도 결제는 성공으로 처리
+            log.warn("판매 기록 실패 (결제는 성공): orderId={}, error={}", orderId, e.getMessage());
+        }
+    }
+
     public PaymentResponse processPayment(Long orderId, PaymentRequest request) {
         String lockKey = LOCK_KEY_PREFIX_PAYMENT + orderId;
         return lockExecutor.executeWithLock(lockKey,
@@ -167,6 +182,9 @@ public class OrderService {
             }
 
             OrderPayment completedPayment = paymentDomainService.completePayment(orderId);
+
+            // 결제 완료 후 판매 기록 (Redis 랭킹용)
+            recordSalesForRanking(orderId);
 
             return new PaymentResponse(
                     orderId,

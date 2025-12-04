@@ -20,6 +20,11 @@ public class UserCouponRepositoryImpl implements UserCouponRepository {
     }
 
     @Override
+    public List<UserCoupon> saveAll(List<UserCoupon> userCoupons) {
+        return jpaUserCouponRepository.saveAll(userCoupons);
+    }
+
+    @Override
     public Optional<UserCoupon> findById(Long id) {
         return jpaUserCouponRepository.findById(id);
     }

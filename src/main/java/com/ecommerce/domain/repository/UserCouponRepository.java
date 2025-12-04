@@ -9,6 +9,8 @@ public interface UserCouponRepository {
 
     UserCoupon save(UserCoupon userCoupon);
 
+    List<UserCoupon> saveAll(List<UserCoupon> userCoupons);
+
     Optional<UserCoupon> findById(Long id);
 
     default UserCoupon getByIdOrThrow(Long id) {

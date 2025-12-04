@@ -40,3 +40,6 @@ out/
 ### Test Output ###
 *.log
 test-output.log
+
+### Claude Code ###
+claude.md
