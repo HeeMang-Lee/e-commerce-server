@@ -146,6 +146,19 @@ Redis 조회가 평균 6ms면 충분히 빠르다. 근데 트래픽이 몰리면
 
 여기서 Caffeine 로컬 캐시를 추가했다. 문제는 **캐시 일관성**이었다.
 
+로컬 캐시를 쓴다는 건 **정합성을 일부 포기**한다는 의미다. 다중 인스턴스 환경에서 한 서버의 로컬 캐시가 갱신되어도 다른 서버는 모른다. 이건 로컬 캐시의 본질적 한계다.
+
+```java
+// Caffeine 설정
+Caffeine.newBuilder()
+    .expireAfterWrite(600, TimeUnit.SECONDS)  // TTL
+    .maximumSize(100)                          // 메모리 관리
+    .recordStats()                             // 모니터링용
+    .build();
+```
+
+`maximumSize`로 메모리 사용량을 제한하고, `recordStats`로 히트율을 모니터링할 수 있게 했다.
+
 ### Pub/Sub vs 버전 기반
 
 처음엔 Redis Pub/Sub으로 캐시 무효화를 구현하려고 했다.
@@ -283,6 +296,10 @@ try {
 - Pub/Sub보다 버전 기반이 더 안정적인 경우도 있다
 - 메시지 유실 가능성을 항상 고려하자
 
+**로컬 캐시는 정합성 포기가 전제다**
+- 다중 인스턴스 환경에서 완벽한 일관성은 불가능
+- 대신 버전 기반 패턴으로 "허용 가능한 지연"을 선택했다
+
 **TTL은 데이터 특성에 맞게**
 - "천천히 변하는 데이터"는 TTL을 길게 가져가도 된다
 
@@ -322,3 +339,4 @@ try {
 - [Redis 공식 문서 - Sorted Sets](https://redis.io/docs/data-types/sorted-sets/)
 - [올리브영 - 선물하기 프로모션 적용기: 멀티 레이어 캐시](https://oliveyoung.tech/2024-12-10/present-promotion-multi-layer-cache/)
 - [카카오페이증권 - Redis on Kubernetes](https://tech.kakaopay.com/post/kakaopaysec-redis-on-kubernetes/)
+- [망나니개발자 - 로컬 캐시와 Redis 조합 시 주의사항](https://mangkyu.tistory.com/371)
