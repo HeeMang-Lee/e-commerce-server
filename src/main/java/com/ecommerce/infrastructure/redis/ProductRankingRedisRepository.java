@@ -28,11 +28,7 @@ public class ProductRankingRedisRepository {
     public void recordSale(Long productId, int quantity) {
         String todayKey = getDailyKey(LocalDate.now());
         redisTemplate.opsForZSet().incrementScore(todayKey, productId.toString(), quantity);
-
-        if (Boolean.FALSE.equals(redisTemplate.hasKey(todayKey + ":ttl_set"))) {
-            redisTemplate.expire(todayKey, DAILY_KEY_TTL);
-            redisTemplate.opsForValue().set(todayKey + ":ttl_set", "1", DAILY_KEY_TTL);
-        }
+        redisTemplate.expire(todayKey, DAILY_KEY_TTL);
 
         log.debug("판매 기록: productId={}, quantity={}, key={}", productId, quantity, todayKey);
     }
@@ -93,7 +89,6 @@ public class ProductRankingRedisRepository {
     public void clearDailyRanking(LocalDate date) {
         String key = getDailyKey(date);
         redisTemplate.delete(key);
-        redisTemplate.delete(key + ":ttl_set");
     }
 
     public void clearAll() {
