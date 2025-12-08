@@ -18,6 +18,15 @@ public class AsyncCouponIssueService implements CouponIssuer {
 
     @Override
     public CouponIssueResult issue(Long userId, Long couponId) {
+        CouponRedisRepository.CouponInfo cachedInfo = couponRedisRepository.getCouponInfo(couponId);
+
+        if (cachedInfo != null) {
+            if (!cachedInfo.canIssue()) {
+                return CouponIssueResult.SOLD_OUT;
+            }
+            return couponRedisRepository.tryIssue(userId, couponId, cachedInfo.maxQuantity());
+        }
+
         Coupon coupon = couponRepository.findById(couponId).orElse(null);
         if (coupon == null) {
             return CouponIssueResult.INVALID_COUPON;
@@ -26,6 +35,13 @@ public class AsyncCouponIssueService implements CouponIssuer {
         if (!coupon.canIssue()) {
             return CouponIssueResult.SOLD_OUT;
         }
+
+        couponRedisRepository.cacheCouponInfo(
+                couponId,
+                coupon.getMaxIssueCount(),
+                coupon.getIssueStartDate(),
+                coupon.getIssueEndDate()
+        );
 
         return couponRedisRepository.tryIssue(userId, couponId, coupon.getMaxIssueCount());
     }
