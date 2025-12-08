@@ -14,6 +14,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -74,19 +75,21 @@ public class CouponQueueProcessor {
             return 0;
         }
 
+        List<Long> userIds = userList.stream()
+                .map(CouponIssueData::userId)
+                .toList();
+
+        Set<Long> alreadyIssuedUserIds = userCouponRepository
+                .findByCouponIdAndUserIdIn(couponId, userIds)
+                .stream()
+                .map(UserCoupon::getUserId)
+                .collect(Collectors.toSet());
+
         LocalDateTime expiresAt = LocalDateTime.now().plusDays(coupon.getValidPeriodDays());
-        List<UserCoupon> userCoupons = new ArrayList<>();
-
-        for (CouponIssueData data : userList) {
-            boolean exists = userCouponRepository
-                    .findByUserIdAndCouponId(data.userId(), couponId)
-                    .isPresent();
-
-            if (!exists) {
-                UserCoupon userCoupon = new UserCoupon(data.userId(), couponId, expiresAt);
-                userCoupons.add(userCoupon);
-            }
-        }
+        List<UserCoupon> userCoupons = userList.stream()
+                .filter(data -> !alreadyIssuedUserIds.contains(data.userId()))
+                .map(data -> new UserCoupon(data.userId(), couponId, expiresAt))
+                .toList();
 
         if (!userCoupons.isEmpty()) {
             userCouponRepository.saveAll(userCoupons);
