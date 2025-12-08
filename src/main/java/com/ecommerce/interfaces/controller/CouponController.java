@@ -3,6 +3,7 @@ package com.ecommerce.interfaces.controller;
 import com.ecommerce.application.dto.CouponIssueRequest;
 import com.ecommerce.application.dto.UserCouponResponse;
 import com.ecommerce.application.service.CouponService;
+import com.ecommerce.domain.service.CouponIssueResult;
 import jakarta.validation.constraints.Positive;
 import lombok.RequiredArgsConstructor;
 import org.springframework.validation.annotation.Validated;
@@ -29,5 +30,12 @@ public class CouponController {
     @GetMapping("/users/{userId}")
     public List<UserCouponResponse> getUserCoupons(@PathVariable @Positive(message = "사용자 ID는 양수여야 합니다") Long userId) {
         return couponService.getUserCoupons(userId);
+    }
+
+    @PostMapping("/{couponId}/issue-async")
+    public CouponIssueResult issueCouponAsync(
+            @PathVariable @Positive(message = "쿠폰 ID는 양수여야 합니다") Long couponId,
+            @RequestParam @Positive(message = "사용자 ID는 양수여야 합니다") Long userId) {
+        return couponService.issueCouponAsync(userId, couponId);
     }
 }

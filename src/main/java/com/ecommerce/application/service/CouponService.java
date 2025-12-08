@@ -5,8 +5,10 @@ import com.ecommerce.application.dto.UserCouponResponse;
 import com.ecommerce.domain.entity.UserCoupon;
 import com.ecommerce.domain.repository.UserCouponRepository;
 import com.ecommerce.domain.service.CouponDomainService;
+import com.ecommerce.domain.service.CouponIssueResult;
+import com.ecommerce.domain.service.CouponIssuer;
 import com.ecommerce.infrastructure.lock.DistributedLockExecutor;
-import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -24,7 +26,6 @@ import java.util.List;
  * - Self-Invocation 없음
  */
 @Service
-@RequiredArgsConstructor
 public class CouponService {
 
     private static final String LOCK_KEY_PREFIX_COUPON = "lock:coupon:";
@@ -33,6 +34,18 @@ public class CouponService {
     private final UserCouponRepository userCouponRepository;
     private final DistributedLockExecutor lockExecutor;
     private final CouponDomainService couponDomainService;
+    private final CouponIssuer asyncCouponIssuer;
+
+    public CouponService(
+            UserCouponRepository userCouponRepository,
+            DistributedLockExecutor lockExecutor,
+            CouponDomainService couponDomainService,
+            @Qualifier("asyncCouponIssueService") CouponIssuer asyncCouponIssuer) {
+        this.userCouponRepository = userCouponRepository;
+        this.lockExecutor = lockExecutor;
+        this.couponDomainService = couponDomainService;
+        this.asyncCouponIssuer = asyncCouponIssuer;
+    }
 
     public UserCouponResponse issueCoupon(CouponIssueRequest request) {
         String lockKey = LOCK_KEY_PREFIX_COUPON + request.couponId();
@@ -56,5 +69,9 @@ public class CouponService {
         return userCouponRepository.findByUserId(userId).stream()
                 .map(UserCouponResponse::from)
                 .toList();
+    }
+
+    public CouponIssueResult issueCouponAsync(Long userId, Long couponId) {
+        return asyncCouponIssuer.issue(userId, couponId);
     }
 }
