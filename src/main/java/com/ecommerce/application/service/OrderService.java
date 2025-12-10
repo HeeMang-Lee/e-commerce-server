@@ -1,13 +1,14 @@
 package com.ecommerce.application.service;
 
 import com.ecommerce.application.dto.*;
+import com.ecommerce.application.event.PaymentCompletedEvent;
 import com.ecommerce.domain.entity.*;
 import com.ecommerce.domain.repository.*;
 import com.ecommerce.domain.service.*;
 import com.ecommerce.infrastructure.lock.DistributedLockExecutor;
-import com.ecommerce.infrastructure.redis.ProductRankingService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -48,7 +49,7 @@ public class OrderService {
     private final PointDomainService pointDomainService;
     private final CouponDomainService couponDomainService;
     private final PaymentDomainService paymentDomainService;
-    private final ProductRankingService productRankingService;
+    private final ApplicationEventPublisher eventPublisher;
 
     public OrderResponse createOrder(OrderRequest request) {
         User user = userRepository.getByIdOrThrow(request.userId());
@@ -138,19 +139,6 @@ public class OrderService {
                 () -> productDomainService.restoreStock(productId, quantity));
     }
 
-    private void recordSalesForRanking(Long orderId) {
-        try {
-            List<OrderItem> orderItems = orderItemRepository.findByOrderId(orderId);
-            for (OrderItem item : orderItems) {
-                productRankingService.recordSale(item.getProductId(), item.getQuantity());
-            }
-            log.debug("판매 기록 완료: orderId={}, items={}", orderId, orderItems.size());
-        } catch (Exception e) {
-            // Redis 기록 실패해도 결제는 성공으로 처리
-            log.warn("판매 기록 실패 (결제는 성공): orderId={}, error={}", orderId, e.getMessage());
-        }
-    }
-
     public PaymentResponse processPayment(Long orderId, PaymentRequest request) {
         String lockKey = LOCK_KEY_PREFIX_PAYMENT + orderId;
         return lockExecutor.executeWithLock(lockKey,
@@ -183,8 +171,7 @@ public class OrderService {
 
             OrderPayment completedPayment = paymentDomainService.completePayment(orderId);
 
-            // 결제 완료 후 판매 기록 (Redis 랭킹용)
-            recordSalesForRanking(orderId);
+            publishPaymentCompletedEvent(order, completedPayment);
 
             return new PaymentResponse(
                     orderId,
@@ -244,4 +231,26 @@ public class OrderService {
         }
     }
 
+    private void publishPaymentCompletedEvent(Order order, OrderPayment payment) {
+        List<OrderItem> orderItems = orderItemRepository.findByOrderId(order.getId());
+
+        List<PaymentCompletedEvent.OrderItemInfo> itemInfos = orderItems.stream()
+                .map(item -> new PaymentCompletedEvent.OrderItemInfo(
+                        item.getProductId(),
+                        item.getQuantity()))
+                .toList();
+
+        PaymentCompletedEvent event = new PaymentCompletedEvent(
+                order.getId(),
+                order.getOrderNumber(),
+                order.getUserId(),
+                payment.getOriginalAmount(),
+                payment.getFinalAmount(),
+                payment.getPaidAt(),
+                itemInfos
+        );
+
+        eventPublisher.publishEvent(event);
+        log.debug("결제 완료 이벤트 발행: orderId={}", order.getId());
+    }
 }
