@@ -13,18 +13,17 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 주문 Application Facade 서비스
+ * 주문 Application Facade 서비스 (Choreography 방식)
  *
  * 책임:
  * - 분산 락 관리 (동시성 제어)
- * - 여러 도메인 서비스의 조율 (Orchestration)
- * - 주문/결제 흐름 관리
+ * - 여러 도메인 서비스 호출
  * - DTO 변환
  *
- * 주의:
- * - 비즈니스 로직은 각 Domain Service에 위임
- * - Self-Invocation 해결을 위해 결제 오케스트레이션은 별도 서비스로 분리
- * - 트랜잭션은 Domain Service 레벨에서 관리
+ * Choreography 패턴:
+ * - 각 도메인 서비스가 자신의 책임을 수행하고 필요시 이벤트 발행
+ * - PaymentDomainService가 결제 완료 후 이벤트 발행 (중앙 조율자 없음)
+ * - 이벤트 핸들러들이 독립적으로 반응
  */
 @Slf4j
 @Service
@@ -33,6 +32,7 @@ public class OrderService {
 
     private static final String LOCK_KEY_PREFIX_STOCK = "lock:stock:";
     private static final String LOCK_KEY_PREFIX_PAYMENT = "lock:payment:";
+    private static final String POINT_DESCRIPTION_ORDER_PAYMENT = "주문 결제";
 
     private final UserRepository userRepository;
     private final OrderRepository orderRepository;
@@ -43,7 +43,9 @@ public class OrderService {
 
     private final OrderDomainService orderDomainService;
     private final ProductDomainService productDomainService;
-    private final PaymentOrchestrationService paymentOrchestrationService;
+    private final PointDomainService pointDomainService;
+    private final CouponDomainService couponDomainService;
+    private final PaymentDomainService paymentDomainService;
 
     public OrderResponse createOrder(OrderRequest request) {
         User user = userRepository.getByIdOrThrow(request.userId());
@@ -127,9 +129,112 @@ public class OrderService {
                 () -> productDomainService.reduceStock(productId, quantity));
     }
 
+    private void restoreStockWithLock(Long productId, int quantity) {
+        String lockKey = LOCK_KEY_PREFIX_STOCK + productId;
+        lockExecutor.executeWithLock(lockKey,
+                () -> productDomainService.restoreStock(productId, quantity));
+    }
+
     public PaymentResponse processPayment(Long orderId, PaymentRequest request) {
         String lockKey = LOCK_KEY_PREFIX_PAYMENT + orderId;
         return lockExecutor.executeWithLock(lockKey,
-                () -> paymentOrchestrationService.executePayment(orderId, request));
+                () -> executePayment(orderId, request));
+    }
+
+    /**
+     * Choreography 방식 결제 처리
+     *
+     * 각 도메인 서비스가 자신의 책임만 수행:
+     * - PointDomainService: 포인트 차감
+     * - CouponDomainService: 쿠폰 사용
+     * - PaymentDomainService: 결제 완료 + 이벤트 발행
+     *
+     * 이벤트 핸들러들이 독립적으로 반응:
+     * - DataPlatformEventHandler: 데이터 플랫폼 전송
+     * - RankingEventHandler: 랭킹 기록
+     */
+    private PaymentResponse executePayment(Long orderId, PaymentRequest request) {
+        Order order = orderRepository.getByIdOrThrow(orderId);
+        OrderPayment payment = orderPaymentRepository.getByOrderIdOrThrow(orderId);
+
+        int usedPoint = request.usePoint() != null ? request.usePoint() : 0;
+        boolean pointDeducted = false;
+        boolean couponUsed = false;
+
+        try {
+            if (usedPoint > 0) {
+                pointDomainService.deductPoint(
+                        order.getUserId(),
+                        usedPoint,
+                        POINT_DESCRIPTION_ORDER_PAYMENT,
+                        orderId
+                );
+                pointDeducted = true;
+            }
+
+            if (payment.getUserCouponId() != null) {
+                couponDomainService.useCoupon(payment.getUserCouponId());
+                couponUsed = true;
+            }
+
+            // Choreography: PaymentDomainService가 결제 완료 후 이벤트 발행
+            OrderPayment completedPayment = paymentDomainService.completePayment(orderId);
+
+            return new PaymentResponse(
+                    orderId,
+                    completedPayment.getPaymentStatus().name(),
+                    completedPayment.getFinalAmount(),
+                    usedPoint,
+                    completedPayment.getPaidAt()
+            );
+
+        } catch (Exception e) {
+            log.error("결제 실패, 보상 트랜잭션 시작: orderId={}, error={}", orderId, e.getMessage());
+            executeCompensationTransaction(orderId, order, pointDeducted, usedPoint, couponUsed, payment.getUserCouponId());
+            throw e;
+        }
+    }
+
+    private void executeCompensationTransaction(Long orderId, Order order, boolean pointDeducted,
+                                                 int usedPoint, boolean couponUsed, Long userCouponId) {
+        try {
+            List<OrderItem> orderItems = orderItemRepository.findByOrderId(orderId);
+            for (OrderItem item : orderItems) {
+                try {
+                    restoreStockWithLock(item.getProductId(), item.getQuantity());
+                    log.info("재고 복구 완료: productId={}, quantity={}", item.getProductId(), item.getQuantity());
+                } catch (Exception ex) {
+                    log.error("재고 복구 실패: productId={}, quantity={}", item.getProductId(), item.getQuantity(), ex);
+                }
+            }
+
+            if (pointDeducted) {
+                try {
+                    pointDomainService.chargePoint(order.getUserId(), usedPoint);
+                    log.info("포인트 복구 완료: userId={}, amount={}", order.getUserId(), usedPoint);
+                } catch (Exception ex) {
+                    log.error("포인트 복구 실패: userId={}, amount={}", order.getUserId(), usedPoint, ex);
+                }
+            }
+
+            if (couponUsed && userCouponId != null) {
+                try {
+                    couponDomainService.cancelCouponUsage(userCouponId);
+                    log.info("쿠폰 복구 완료: userCouponId={}", userCouponId);
+                } catch (Exception ex) {
+                    log.error("쿠폰 복구 실패: userCouponId={}", userCouponId, ex);
+                }
+            }
+
+            try {
+                paymentDomainService.failPayment(orderId);
+                log.info("결제 상태 FAILED로 변경: orderId={}", orderId);
+            } catch (Exception ex) {
+                log.error("결제 상태 변경 실패: orderId={}", orderId, ex);
+            }
+
+        } catch (Exception e) {
+            log.error("보상 트랜잭션 중 오류 발생: orderId={}", orderId, e);
+        }
     }
 }
