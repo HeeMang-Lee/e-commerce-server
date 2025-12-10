@@ -5,18 +5,16 @@ import com.ecommerce.domain.repository.OutboxEventRepository;
 import com.ecommerce.infrastructure.external.DataPlatformService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.event.TransactionPhase;
-import org.springframework.transaction.event.TransactionalEventListener;
 
 /**
- * 데이터 플랫폼 전송 이벤트 핸들러
+ * 데이터 플랫폼 전송 이벤트 핸들러 (별도 클래스로 Self-Invocation 해결)
  *
  * 결제 완료 후 주문 데이터를 외부 데이터 플랫폼으로 전송한다.
- * - AFTER_COMMIT: 메인 트랜잭션 커밋 후 실행
  * - @Async: 별도 스레드에서 비동기 실행
  * - Best Effort: 실패 시 Outbox에 저장하여 재시도
  */
@@ -31,7 +29,7 @@ public class DataPlatformEventHandler {
     private final OutboxEventRepository outboxEventRepository;
 
     @Async("eventExecutor")
-    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    @EventListener
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void handle(PaymentCompletedEvent event) {
         log.info("데이터 플랫폼 전송 시작: orderId={}", event.orderId());
