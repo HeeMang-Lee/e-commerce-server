@@ -1,0 +1,59 @@
+package com.ecommerce.application.event;
+
+import com.ecommerce.domain.entity.OutboxEvent;
+import com.ecommerce.domain.repository.OutboxEventRepository;
+import com.ecommerce.infrastructure.external.DataPlatformService;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.scheduling.annotation.Async;
+import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.event.TransactionPhase;
+import org.springframework.transaction.event.TransactionalEventListener;
+
+/**
+ * 데이터 플랫폼 전송 이벤트 핸들러
+ *
+ * 결제 완료 후 주문 데이터를 외부 데이터 플랫폼으로 전송한다.
+ * - AFTER_COMMIT: 메인 트랜잭션 커밋 후 실행
+ * - @Async: 별도 스레드에서 비동기 실행
+ * - Best Effort: 실패 시 Outbox에 저장하여 재시도
+ */
+@Slf4j
+@Component
+@RequiredArgsConstructor
+public class DataPlatformEventHandler {
+
+    private static final String EVENT_TYPE_ORDER_COMPLETED = "ORDER_COMPLETED";
+
+    private final DataPlatformService dataPlatformService;
+    private final OutboxEventRepository outboxEventRepository;
+
+    @Async("eventExecutor")
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void handle(PaymentCompletedEvent event) {
+        log.info("데이터 플랫폼 전송 시작: orderId={}", event.orderId());
+
+        String orderData = event.toOrderDataJson();
+
+        try {
+            boolean success = dataPlatformService.sendOrderData(orderData);
+            if (success) {
+                log.info("데이터 플랫폼 전송 성공: orderId={}", event.orderId());
+            } else {
+                log.warn("데이터 플랫폼 전송 실패, 아웃박스에 저장: orderId={}", event.orderId());
+                saveToOutbox(orderData);
+            }
+        } catch (Exception e) {
+            log.error("데이터 플랫폼 전송 중 예외 발생, 아웃박스에 저장: orderId={}", event.orderId(), e);
+            saveToOutbox(orderData);
+        }
+    }
+
+    private void saveToOutbox(String orderData) {
+        OutboxEvent outboxEvent = new OutboxEvent(EVENT_TYPE_ORDER_COMPLETED, orderData);
+        outboxEventRepository.save(outboxEvent);
+    }
+}
