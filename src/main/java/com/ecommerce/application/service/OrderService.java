@@ -1,29 +1,32 @@
 package com.ecommerce.application.service;
 
 import com.ecommerce.application.dto.*;
+import com.ecommerce.application.event.PaymentCompletedEvent;
 import com.ecommerce.domain.entity.*;
 import com.ecommerce.domain.repository.*;
 import com.ecommerce.domain.service.*;
 import com.ecommerce.infrastructure.lock.DistributedLockExecutor;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 주문 Application Facade 서비스 (Choreography 방식)
+ * 주문 Application Facade 서비스
  *
  * 책임:
  * - 분산 락 관리 (동시성 제어)
  * - 여러 도메인 서비스 호출
+ * - 이벤트 발행 (부가 로직 트리거)
  * - DTO 변환
  *
- * Choreography 패턴:
- * - 각 도메인 서비스가 자신의 책임을 수행하고 필요시 이벤트 발행
- * - PaymentDomainService가 결제 완료 후 이벤트 발행 (중앙 조율자 없음)
- * - 이벤트 핸들러들이 독립적으로 반응
+ * Self-Invocation 해결:
+ * - Facade는 @Transactional 없음
+ * - 도메인 서비스가 각자 @Transactional 관리
+ * - 이벤트 핸들러는 별도 클래스로 분리
  */
 @Slf4j
 @Service
@@ -46,6 +49,7 @@ public class OrderService {
     private final PointDomainService pointDomainService;
     private final CouponDomainService couponDomainService;
     private final PaymentDomainService paymentDomainService;
+    private final ApplicationEventPublisher eventPublisher;
 
     public OrderResponse createOrder(OrderRequest request) {
         User user = userRepository.getByIdOrThrow(request.userId());
@@ -142,16 +146,15 @@ public class OrderService {
     }
 
     /**
-     * Choreography 방식 결제 처리
+     * 결제 처리 (멘토링 권장 구조)
      *
-     * 각 도메인 서비스가 자신의 책임만 수행:
-     * - PointDomainService: 포인트 차감
-     * - CouponDomainService: 쿠폰 사용
-     * - PaymentDomainService: 결제 완료 + 이벤트 발행
+     * 1. 각 도메인 서비스 호출 (각자 @Transactional)
+     * 2. 결제 완료 후 Facade에서 이벤트 발행
+     * 3. 이벤트 핸들러(별도 클래스)가 부가 로직 처리
      *
-     * 이벤트 핸들러들이 독립적으로 반응:
-     * - DataPlatformEventHandler: 데이터 플랫폼 전송
-     * - RankingEventHandler: 랭킹 기록
+     * Self-Invocation 해결:
+     * - Facade는 @Transactional 없음
+     * - 이벤트 핸들러가 별도 클래스이므로 프록시 정상 동작
      */
     private PaymentResponse executePayment(Long orderId, PaymentRequest request) {
         Order order = orderRepository.getByIdOrThrow(orderId);
@@ -177,8 +180,11 @@ public class OrderService {
                 couponUsed = true;
             }
 
-            // Choreography: PaymentDomainService가 결제 완료 후 이벤트 발행
+            // 도메인 서비스 호출 (각자 @Transactional)
             OrderPayment completedPayment = paymentDomainService.completePayment(orderId);
+
+            // Facade에서 이벤트 발행 → 이벤트 핸들러(별도 클래스)가 처리
+            publishPaymentCompletedEvent(order, completedPayment);
 
             return new PaymentResponse(
                     orderId,
@@ -193,6 +199,29 @@ public class OrderService {
             executeCompensationTransaction(orderId, order, pointDeducted, usedPoint, couponUsed, payment.getUserCouponId());
             throw e;
         }
+    }
+
+    private void publishPaymentCompletedEvent(Order order, OrderPayment payment) {
+        List<OrderItem> orderItems = orderItemRepository.findByOrderId(order.getId());
+
+        List<PaymentCompletedEvent.OrderItemInfo> itemInfos = orderItems.stream()
+                .map(item -> new PaymentCompletedEvent.OrderItemInfo(
+                        item.getProductId(),
+                        item.getQuantity()))
+                .toList();
+
+        PaymentCompletedEvent event = new PaymentCompletedEvent(
+                order.getId(),
+                order.getOrderNumber(),
+                order.getUserId(),
+                payment.getOriginalAmount(),
+                payment.getFinalAmount(),
+                payment.getPaidAt(),
+                itemInfos
+        );
+
+        eventPublisher.publishEvent(event);
+        log.debug("결제 완료 이벤트 발행: orderId={}", order.getId());
     }
 
     private void executeCompensationTransaction(Long orderId, Order order, boolean pointDeducted,
