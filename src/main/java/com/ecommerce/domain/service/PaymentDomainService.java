@@ -1,13 +1,8 @@
 package com.ecommerce.domain.service;
 
-import com.ecommerce.domain.entity.Order;
 import com.ecommerce.domain.entity.OrderPayment;
-import com.ecommerce.domain.entity.OutboxEvent;
 import com.ecommerce.domain.entity.PaymentStatus;
 import com.ecommerce.domain.repository.OrderPaymentRepository;
-import com.ecommerce.domain.repository.OrderRepository;
-import com.ecommerce.domain.repository.OutboxEventRepository;
-import com.ecommerce.infrastructure.external.DataPlatformService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -17,29 +12,22 @@ import org.springframework.transaction.annotation.Transactional;
  * 결제 도메인 서비스
  *
  * 책임:
- * - 결제 완료 처리
- * - 주문 데이터 전송 (아웃박스 패턴)
+ * - 결제 완료/실패 처리
  * - 트랜잭션 경계 관리
  *
  * 주의:
- * - 포인트/쿠폰 차감은 상위 Facade에서 처리
- * - 다른 도메인 서비스에 의존하지 않음
+ * - 이벤트 발행은 상위 Facade(OrderService)에서 처리
+ * - 도메인 서비스는 순수하게 도메인 로직만 담당
  */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class PaymentDomainService {
 
-    private static final String EVENT_TYPE_ORDER_COMPLETED = "ORDER_COMPLETED";
-
-    private final OrderRepository orderRepository;
     private final OrderPaymentRepository orderPaymentRepository;
-    private final OutboxEventRepository outboxEventRepository;
-    private final DataPlatformService dataPlatformService;
 
     @Transactional
     public OrderPayment completePayment(Long orderId) {
-        Order order = orderRepository.getByIdOrThrow(orderId);
         OrderPayment payment = orderPaymentRepository.getByOrderIdOrThrow(orderId);
 
         if (payment.getPaymentStatus() == PaymentStatus.COMPLETED) {
@@ -48,9 +36,6 @@ public class PaymentDomainService {
 
         payment.complete();
         orderPaymentRepository.save(payment);
-
-        // 주문 데이터 전송 (Best Effort + Outbox Pattern)
-        sendOrderDataWithOutbox(order, payment);
 
         return payment;
     }
@@ -69,35 +54,5 @@ public class PaymentDomainService {
         log.info("결제 상태 FAILED로 변경: orderId={}", orderId);
 
         return payment;
-    }
-
-    private void sendOrderDataWithOutbox(Order order, OrderPayment payment) {
-        String orderData = buildOrderData(order, payment);
-
-        try {
-            boolean success = dataPlatformService.sendOrderData(orderData);
-            if (success) {
-                log.info("주문 데이터 전송 성공: orderId={}", order.getId());
-            } else {
-                log.warn("주문 데이터 전송 실패, 아웃박스에 저장: orderId={}", order.getId());
-                saveToOutbox(orderData);
-            }
-        } catch (Exception e) {
-            log.error("주문 데이터 전송 중 예외 발생, 아웃박스에 저장: orderId={}", order.getId(), e);
-            saveToOutbox(orderData);
-        }
-    }
-
-    private String buildOrderData(Order order, OrderPayment payment) {
-        return "{\"orderId\":" + order.getId() +
-                ",\"orderNumber\":\"" + order.getOrderNumber() +
-                "\",\"userId\":" + order.getUserId() +
-                ",\"totalAmount\":" + payment.getOriginalAmount() +
-                ",\"finalAmount\":" + payment.getFinalAmount() + "}";
-    }
-
-    private void saveToOutbox(String orderData) {
-        OutboxEvent outboxEvent = new OutboxEvent(EVENT_TYPE_ORDER_COMPLETED, orderData);
-        outboxEventRepository.save(outboxEvent);
     }
 }

@@ -43,6 +43,7 @@ dependencies {
     testImplementation 'org.testcontainers:mysql'
     testImplementation 'com.redis:testcontainers-redis:2.2.2'
     testImplementation 'org.testcontainers:junit-jupiter'
+    testImplementation 'org.awaitility:awaitility:4.2.0'
 }
 
 tasks.named('test') {
