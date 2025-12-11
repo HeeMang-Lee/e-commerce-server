@@ -1,10 +1,13 @@
 package com.ecommerce.infrastructure.persistence.repository;
 
 import com.ecommerce.domain.entity.OrderPayment;
+import com.ecommerce.domain.entity.PaymentStatus;
 import com.ecommerce.domain.repository.OrderPaymentRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 
 @Repository
@@ -26,6 +29,11 @@ public class OrderPaymentRepositoryImpl implements OrderPaymentRepository {
     @Override
     public Optional<OrderPayment> findByOrderId(Long orderId) {
         return jpaOrderPaymentRepository.findByOrderId(orderId);
+    }
+
+    @Override
+    public List<OrderPayment> findByStatusAndPaidAtAfter(PaymentStatus status, LocalDateTime after) {
+        return jpaOrderPaymentRepository.findByPaymentStatusAndPaidAtAfter(status, after);
     }
 
     @Override
