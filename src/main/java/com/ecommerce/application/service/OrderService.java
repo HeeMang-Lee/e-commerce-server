@@ -1,6 +1,7 @@
 package com.ecommerce.application.service;
 
 import com.ecommerce.application.dto.*;
+import com.ecommerce.application.event.DomainEventPublisher;
 import com.ecommerce.application.event.PaymentCompletedEvent;
 import com.ecommerce.domain.entity.*;
 import com.ecommerce.domain.repository.*;
@@ -8,7 +9,6 @@ import com.ecommerce.domain.service.*;
 import com.ecommerce.infrastructure.lock.DistributedLockExecutor;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -49,7 +49,7 @@ public class OrderService {
     private final PointDomainService pointDomainService;
     private final CouponDomainService couponDomainService;
     private final PaymentDomainService paymentDomainService;
-    private final ApplicationEventPublisher eventPublisher;
+    private final DomainEventPublisher eventPublisher;
 
     public OrderResponse createOrder(OrderRequest request) {
         User user = userRepository.getByIdOrThrow(request.userId());
@@ -220,7 +220,7 @@ public class OrderService {
                 itemInfos
         );
 
-        eventPublisher.publishEvent(event);
+        eventPublisher.publish(event);
         log.debug("결제 완료 이벤트 발행: orderId={}", order.getId());
     }
 
