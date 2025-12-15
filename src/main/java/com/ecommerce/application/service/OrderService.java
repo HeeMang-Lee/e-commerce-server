@@ -1,11 +1,12 @@
 package com.ecommerce.application.service;
 
 import com.ecommerce.application.dto.*;
+import com.ecommerce.application.event.DomainEventPublisher;
+import com.ecommerce.application.event.PaymentCompletedEvent;
 import com.ecommerce.domain.entity.*;
 import com.ecommerce.domain.repository.*;
 import com.ecommerce.domain.service.*;
 import com.ecommerce.infrastructure.lock.DistributedLockExecutor;
-import com.ecommerce.infrastructure.redis.ProductRankingService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -18,14 +19,14 @@ import java.util.List;
  *
  * 책임:
  * - 분산 락 관리 (동시성 제어)
- * - 여러 도메인 서비스의 조율 (Orchestration)
- * - 주문/결제 흐름 관리
+ * - 여러 도메인 서비스 호출
+ * - 이벤트 발행 (부가 로직 트리거)
  * - DTO 변환
  *
- * 주의:
- * - 비즈니스 로직은 각 Domain Service에 위임
- * - Self-Invocation 없음
- * - 트랜잭션은 Domain Service 레벨에서 관리
+ * Self-Invocation 해결:
+ * - Facade는 @Transactional 없음
+ * - 도메인 서비스가 각자 @Transactional 관리
+ * - 이벤트 핸들러는 별도 클래스로 분리
  */
 @Slf4j
 @Service
@@ -48,7 +49,7 @@ public class OrderService {
     private final PointDomainService pointDomainService;
     private final CouponDomainService couponDomainService;
     private final PaymentDomainService paymentDomainService;
-    private final ProductRankingService productRankingService;
+    private final DomainEventPublisher eventPublisher;
 
     public OrderResponse createOrder(OrderRequest request) {
         User user = userRepository.getByIdOrThrow(request.userId());
@@ -138,26 +139,24 @@ public class OrderService {
                 () -> productDomainService.restoreStock(productId, quantity));
     }
 
-    private void recordSalesForRanking(Long orderId) {
-        try {
-            List<OrderItem> orderItems = orderItemRepository.findByOrderId(orderId);
-            for (OrderItem item : orderItems) {
-                productRankingService.recordSale(item.getProductId(), item.getQuantity());
-            }
-            log.debug("판매 기록 완료: orderId={}, items={}", orderId, orderItems.size());
-        } catch (Exception e) {
-            // Redis 기록 실패해도 결제는 성공으로 처리
-            log.warn("판매 기록 실패 (결제는 성공): orderId={}, error={}", orderId, e.getMessage());
-        }
-    }
-
     public PaymentResponse processPayment(Long orderId, PaymentRequest request) {
         String lockKey = LOCK_KEY_PREFIX_PAYMENT + orderId;
         return lockExecutor.executeWithLock(lockKey,
-                () -> executePaymentOrchestration(orderId, request));
+                () -> executePayment(orderId, request));
     }
 
-    private PaymentResponse executePaymentOrchestration(Long orderId, PaymentRequest request) {
+    /**
+     * 결제 처리 (멘토링 권장 구조)
+     *
+     * 1. 각 도메인 서비스 호출 (각자 @Transactional)
+     * 2. 결제 완료 후 Facade에서 이벤트 발행
+     * 3. 이벤트 핸들러(별도 클래스)가 부가 로직 처리
+     *
+     * Self-Invocation 해결:
+     * - Facade는 @Transactional 없음
+     * - 이벤트 핸들러가 별도 클래스이므로 프록시 정상 동작
+     */
+    private PaymentResponse executePayment(Long orderId, PaymentRequest request) {
         Order order = orderRepository.getByIdOrThrow(orderId);
         OrderPayment payment = orderPaymentRepository.getByOrderIdOrThrow(orderId);
 
@@ -181,10 +180,11 @@ public class OrderService {
                 couponUsed = true;
             }
 
+            // 도메인 서비스 호출 (각자 @Transactional)
             OrderPayment completedPayment = paymentDomainService.completePayment(orderId);
 
-            // 결제 완료 후 판매 기록 (Redis 랭킹용)
-            recordSalesForRanking(orderId);
+            // Facade에서 이벤트 발행 → 이벤트 핸들러(별도 클래스)가 처리
+            publishPaymentCompletedEvent(order, completedPayment);
 
             return new PaymentResponse(
                     orderId,
@@ -199,6 +199,29 @@ public class OrderService {
             executeCompensationTransaction(orderId, order, pointDeducted, usedPoint, couponUsed, payment.getUserCouponId());
             throw e;
         }
+    }
+
+    private void publishPaymentCompletedEvent(Order order, OrderPayment payment) {
+        List<OrderItem> orderItems = orderItemRepository.findByOrderId(order.getId());
+
+        List<PaymentCompletedEvent.OrderItemInfo> itemInfos = orderItems.stream()
+                .map(item -> new PaymentCompletedEvent.OrderItemInfo(
+                        item.getProductId(),
+                        item.getQuantity()))
+                .toList();
+
+        PaymentCompletedEvent event = new PaymentCompletedEvent(
+                order.getId(),
+                order.getOrderNumber(),
+                order.getUserId(),
+                payment.getOriginalAmount(),
+                payment.getFinalAmount(),
+                payment.getPaidAt(),
+                itemInfos
+        );
+
+        eventPublisher.publish(event);
+        log.debug("결제 완료 이벤트 발행: orderId={}", order.getId());
     }
 
     private void executeCompensationTransaction(Long orderId, Order order, boolean pointDeducted,
@@ -243,5 +266,4 @@ public class OrderService {
             log.error("보상 트랜잭션 중 오류 발생: orderId={}", orderId, e);
         }
     }
-
 }
