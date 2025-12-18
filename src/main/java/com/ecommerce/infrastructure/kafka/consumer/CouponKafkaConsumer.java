@@ -9,7 +9,11 @@ import com.ecommerce.domain.repository.UserCouponRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Profile;
+import org.springframework.kafka.annotation.DltHandler;
 import org.springframework.kafka.annotation.KafkaListener;
+import org.springframework.kafka.annotation.RetryableTopic;
+import org.springframework.kafka.retrytopic.DltStrategy;
+import org.springframework.retry.annotation.Backoff;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -31,10 +35,14 @@ public class CouponKafkaConsumer {
     private final CouponRepository couponRepository;
     private final UserCouponRepository userCouponRepository;
 
+    @RetryableTopic(
+            attempts = "3",
+            backoff = @Backoff(delay = 1000, multiplier = 2),
+            dltStrategy = DltStrategy.FAIL_ON_ERROR
+    )
     @KafkaListener(
             topics = KafkaConfig.TOPIC_COUPON_ISSUE,
-            groupId = "coupon-issue-service",
-            containerFactory = "kafkaListenerContainerFactory"
+            groupId = "coupon-issue-service"
     )
     @Transactional
     public void consume(CouponIssueEvent event) {
@@ -74,5 +82,12 @@ public class CouponKafkaConsumer {
         couponRepository.save(coupon);
 
         log.debug("Kafka 쿠폰 발급 완료: couponId={}, userId={}", couponId, userId);
+    }
+
+    @DltHandler
+    public void handleDlt(CouponIssueEvent event) {
+        log.error("[DLT] 쿠폰 발급 최종 실패 - couponId={}, userId={} | 수동 처리 필요",
+                event.couponId(), event.userId());
+        // TODO: Slack 알림 연동
     }
 }

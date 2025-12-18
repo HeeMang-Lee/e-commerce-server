@@ -242,33 +242,49 @@ return 'SUCCESS'
 
 ## 에러 처리
 
-### Dead Letter Queue
+### @RetryableTopic으로 재시도 + DLT
 
 ```java
-// KafkaConfig.java
-@Bean
-public CommonErrorHandler kafkaErrorHandler(KafkaTemplate<String, Object> kafkaTemplate) {
-    DeadLetterPublishingRecoverer recoverer =
-        new DeadLetterPublishingRecoverer(kafkaTemplate);
-    return new DefaultErrorHandler(recoverer, new FixedBackOff(1000L, 3));
+// CouponKafkaConsumer.java
+@RetryableTopic(
+    attempts = "3",
+    backoff = @Backoff(delay = 1000, multiplier = 2),  // 지수 백오프
+    dltStrategy = DltStrategy.FAIL_ON_ERROR
+)
+@KafkaListener(topics = "coupon-issue", groupId = "coupon-issue-service")
+public void consume(CouponIssueEvent event) {
+    // 비즈니스 로직
+}
+
+@DltHandler
+public void handleDlt(CouponIssueEvent event) {
+    log.error("[DLT] 쿠폰 발급 최종 실패 - couponId={}, userId={}",
+            event.couponId(), event.userId());
+    // TODO: Slack 알림 연동
 }
 ```
 
-동작 방식:
+### 동작 방식
+
 ```
 메시지 처리 실패
     ↓
-1초 후 재시도 (최대 3번)
+1초 후 재시도 (1회) → coupon-issue-retry-0 토픽
+    ↓
+2초 후 재시도 (2회) → coupon-issue-retry-1 토픽
+    ↓
+4초 후 재시도 (3회) → coupon-issue-retry-2 토픽
     ↓
 3번 다 실패하면
     ↓
-coupon-issue.DLT 토픽으로 이동
+coupon-issue-dlt 토픽으로 이동 → @DltHandler 실행
 ```
+
+지수 백오프(1초→2초→4초)로 상대 서버 회복 시간을 준다.
 
 ### Consumer의 멱등성
 
 ```java
-// CouponKafkaConsumer.java
 public void consume(CouponIssueEvent event) {
     // 이미 발급되었으면 skip (멱등성)
     if (userCouponRepository.findByUserIdAndCouponId(userId, couponId).isPresent()) {

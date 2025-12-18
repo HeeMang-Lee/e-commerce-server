@@ -6,7 +6,11 @@ import com.ecommerce.infrastructure.redis.ProductRankingService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Profile;
+import org.springframework.kafka.annotation.DltHandler;
 import org.springframework.kafka.annotation.KafkaListener;
+import org.springframework.kafka.annotation.RetryableTopic;
+import org.springframework.kafka.retrytopic.DltStrategy;
+import org.springframework.retry.annotation.Backoff;
 import org.springframework.stereotype.Component;
 
 @Slf4j
@@ -17,10 +21,14 @@ public class RankingKafkaConsumer {
 
     private final ProductRankingService productRankingService;
 
+    @RetryableTopic(
+            attempts = "3",
+            backoff = @Backoff(delay = 1000, multiplier = 2),
+            dltStrategy = DltStrategy.FAIL_ON_ERROR
+    )
     @KafkaListener(
             topics = KafkaConfig.TOPIC_PAYMENT_COMPLETED,
-            groupId = "ranking-service",
-            containerFactory = "kafkaListenerContainerFactory"
+            groupId = "ranking-service"
     )
     public void consume(PaymentCompletedEvent event) {
         log.info("Kafka 랭킹 기록 시작: orderId={}, items={}",
@@ -36,5 +44,11 @@ public class RankingKafkaConsumer {
         }
 
         log.info("Kafka 랭킹 기록 완료: orderId={}", event.orderId());
+    }
+
+    @DltHandler
+    public void handleDlt(PaymentCompletedEvent event) {
+        log.error("[DLT] 랭킹 기록 최종 실패 - orderId={} | 수동 처리 필요", event.orderId());
+        // TODO: Slack 알림 연동
     }
 }
