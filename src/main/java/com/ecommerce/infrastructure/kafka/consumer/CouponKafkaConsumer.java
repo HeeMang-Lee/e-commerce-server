@@ -35,6 +35,17 @@ public class CouponKafkaConsumer {
     private final CouponRepository couponRepository;
     private final UserCouponRepository userCouponRepository;
 
+    // DLT 처리 횟수 (테스트용)
+    private final java.util.concurrent.atomic.AtomicInteger dltCount = new java.util.concurrent.atomic.AtomicInteger(0);
+
+    public int getDltCount() {
+        return dltCount.get();
+    }
+
+    public void resetDltCount() {
+        dltCount.set(0);
+    }
+
     @RetryableTopic(
             attempts = "3",
             backoff = @Backoff(delay = 1000, multiplier = 2),
@@ -50,6 +61,11 @@ public class CouponKafkaConsumer {
         Long userId = event.userId();
 
         log.debug("Kafka 쿠폰 발급 처리 시작: couponId={}, userId={}", couponId, userId);
+
+        // 테스트용: userId가 음수면 강제로 예외 발생 (DLT 테스트)
+        if (userId < 0) {
+            throw new IllegalArgumentException("DLT 테스트용 강제 실패: userId=" + userId);
+        }
 
         // 1. 이미 발급되었는지 확인 (멱등성)
         Optional<UserCoupon> existing = userCouponRepository.findByUserIdAndCouponId(userId, couponId);
@@ -88,6 +104,7 @@ public class CouponKafkaConsumer {
     public void handleDlt(CouponIssueEvent event) {
         log.error("[DLT] 쿠폰 발급 최종 실패 - couponId={}, userId={} | 수동 처리 필요",
                 event.couponId(), event.userId());
+        dltCount.incrementAndGet();
         // TODO: Slack 알림 연동
     }
 }
