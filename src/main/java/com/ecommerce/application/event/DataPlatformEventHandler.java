@@ -5,6 +5,7 @@ import com.ecommerce.domain.repository.OutboxEventRepository;
 import com.ecommerce.infrastructure.external.DataPlatformService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.annotation.Profile;
 import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
@@ -17,9 +18,12 @@ import org.springframework.transaction.annotation.Transactional;
  * 결제 완료 후 주문 데이터를 외부 데이터 플랫폼으로 전송한다.
  * - @Async: 별도 스레드에서 비동기 실행
  * - Best Effort: 실패 시 Outbox에 저장하여 재시도
+ *
+ * kafka 프로파일에서는 DataPlatformKafkaConsumer가 대신 처리한다.
  */
 @Slf4j
 @Component
+@Profile("!kafka")
 @RequiredArgsConstructor
 public class DataPlatformEventHandler {
 

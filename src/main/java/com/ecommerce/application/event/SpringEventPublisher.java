@@ -2,6 +2,7 @@ package com.ecommerce.application.event;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 
 /**
@@ -11,6 +12,7 @@ import org.springframework.stereotype.Component;
  * 추후 Kafka 등으로 전환 시 이 구현체만 교체하면 된다.
  */
 @Component
+@Profile("!kafka")
 @RequiredArgsConstructor
 public class SpringEventPublisher implements DomainEventPublisher {
 
