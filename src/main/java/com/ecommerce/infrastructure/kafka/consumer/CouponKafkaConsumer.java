@@ -3,9 +3,13 @@ package com.ecommerce.infrastructure.kafka.consumer;
 import com.ecommerce.application.event.CouponIssueEvent;
 import com.ecommerce.config.KafkaConfig;
 import com.ecommerce.domain.entity.Coupon;
+import com.ecommerce.domain.entity.FailedEvent;
 import com.ecommerce.domain.entity.UserCoupon;
 import com.ecommerce.domain.repository.CouponRepository;
+import com.ecommerce.domain.repository.FailedEventRepository;
 import com.ecommerce.domain.repository.UserCouponRepository;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Profile;
@@ -34,6 +38,8 @@ public class CouponKafkaConsumer {
 
     private final CouponRepository couponRepository;
     private final UserCouponRepository userCouponRepository;
+    private final FailedEventRepository failedEventRepository;
+    private final ObjectMapper objectMapper;
 
     // DLT 처리 횟수 (테스트용)
     private final java.util.concurrent.atomic.AtomicInteger dltCount = new java.util.concurrent.atomic.AtomicInteger(0);
@@ -101,10 +107,24 @@ public class CouponKafkaConsumer {
     }
 
     @DltHandler
+    @Transactional
     public void handleDlt(CouponIssueEvent event) {
-        log.error("[DLT] 쿠폰 발급 최종 실패 - couponId={}, userId={} | 수동 처리 필요",
+        log.error("[DLT] 쿠폰 발급 최종 실패 - couponId={}, userId={} | DB 저장 후 스케줄러가 재처리",
                 event.couponId(), event.userId());
         dltCount.incrementAndGet();
-        // TODO: Slack 알림 연동
+
+        try {
+            String payload = objectMapper.writeValueAsString(event);
+            FailedEvent failedEvent = new FailedEvent(
+                    KafkaConfig.TOPIC_COUPON_ISSUE,
+                    event.couponId().toString(),
+                    payload,
+                    "DLT 도달: 3회 재시도 실패"
+            );
+            failedEventRepository.save(failedEvent);
+            log.info("[DLT] 실패 이벤트 DB 저장 완료: couponId={}, userId={}", event.couponId(), event.userId());
+        } catch (JsonProcessingException e) {
+            log.error("[DLT] 실패 이벤트 직렬화 실패: {}", e.getMessage());
+        }
     }
 }
