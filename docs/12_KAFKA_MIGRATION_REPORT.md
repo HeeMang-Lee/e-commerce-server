@@ -8,18 +8,19 @@
 
 ## 전체 구조
 
+
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
-│                              Producer                                    │
+│                              Producer                                   │
 │  KafkaCouponIssueService.issue(userId, couponId)                        │
 │      └── kafkaTemplate.send("coupon-issue", couponId.toString(), event) │
 └─────────────────────────────────────────────────────────────────────────┘
                                     │
                                     ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
-│                         Kafka Broker                                     │
-│                                                                          │
-│  Topic: coupon-issue (파티션 3개)                                        │
+│                         Kafka Broker                                    │
+│                                                                         │
+│  Topic: coupon-issue (파티션 3개)                                         │
 │  ┌──────────────┐ ┌──────────────┐ ┌──────────────┐                     │
 │  │ Partition 0  │ │ Partition 1  │ │ Partition 2  │                     │
 │  │              │ │              │ │              │                     │
@@ -32,13 +33,13 @@
                                     │
                                     ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
-│                    Consumer Group: coupon-issue-service                  │
-│                                                                          │
-│  현재: Consumer 1개가 3개 파티션 모두 처리                               │
+│                    Consumer Group: coupon-issue-service                 │
+│                                                                         │
+│  현재: Consumer 1개가 3개 파티션 모두 처리                                     │
 │  ┌─────────────────────────────────────────────────────┐                │
 │  │ CouponKafkaConsumer                                 │                │
-│  │   - Partition 0, 1, 2 담당                          │                │
-│  │   - 메시지 수신 → DB 저장                           │                │
+│  │   - Partition 0, 1, 2 담당                           │                │
+│  │   - 메시지 수신 → DB 저장                               │                │
 │  └─────────────────────────────────────────────────────┘                │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
@@ -142,24 +143,33 @@ public void consume(CouponIssueEvent event) { ... }
 Consumer Group: coupon-issue-service
 
 ┌─ 현재 (Consumer 1개) ─────────────────────────────┐
-│                                                    │
-│  Consumer A                                        │
-│    ├── Partition 0 담당                            │
-│    ├── Partition 1 담당                            │
-│    └── Partition 2 담당                            │
-│                                                    │
-└────────────────────────────────────────────────────┘
+│                                                 │
+│  Consumer A                                     │
+│    ├── Partition 0 담당                          │
+│    ├── Partition 1 담당                          │
+│    └── Partition 2 담당                          │
+│                                                 │
+└─────────────────────────────────────────────────┘
 
 ┌─ 확장 시 (Consumer 3개) ──────────────────────────┐
-│                                                    │
-│  Consumer A → Partition 0 담당                     │
-│  Consumer B → Partition 1 담당                     │
-│  Consumer C → Partition 2 담당                     │
-│                                                    │
-└────────────────────────────────────────────────────┘
+│                                                 │
+│  Consumer A → Partition 0 담당                   │
+│  Consumer B → Partition 1 담당                   │
+│  Consumer C → Partition 2 담당                   │
+│                                                 │
+└─────────────────────────────────────────────────┘
 ```
 
 Consumer 4개로 늘리면? → 1개는 놀게 됨 (파티션보다 많으므로)
+
+### 권장 구성
+
+| 환경 | 파티션 수 | Consumer 수 | 비고 |
+|------|----------|-------------|------|
+| 개발/테스트 | 3 | 1 | 단일 서버로 충분 |
+| 운영 | 3 | 3 | 파티션 = Consumer로 최대 병렬 처리 |
+
+> **핵심**: 파티션 수 = Consumer 수일 때 최대 처리량. Consumer가 파티션보다 많으면 놀게 되고, 적으면 한 Consumer가 여러 파티션을 처리한다.
 
 ### 다른 Consumer Group은 같은 메시지를 받는다
 
@@ -298,6 +308,170 @@ public void consume(CouponIssueEvent event) {
 
 ---
 
+## DLT 재처리
+
+### 전체 흐름
+
+```
+Consumer 처리 실패
+    │
+    ▼
+@RetryableTopic (1초 → 2초 → 4초, 3회)
+    │
+    ▼ 3회 다 실패
+DLT 토픽 → @DltHandler
+    │
+    ▼
+FailedEvent 테이블에 저장
+    │
+    ▼
+DltRetryScheduler (10초마다 체크)
+    │
+    ├── nextRetryAt이 지났으면 재처리
+    │       ├── 성공 → RECOVERED
+    │       └── 실패 → 지수 백오프로 다음 재시도 예약
+    │
+    └── 3회 실패 → ABANDONED (수동 처리 필요)
+```
+
+### DLT 메시지 DB 저장
+
+```java
+// CouponKafkaConsumer.java
+@DltHandler
+@Transactional
+public void handleDlt(CouponIssueEvent event) {
+    log.error("[DLT] 쿠폰 발급 최종 실패 - couponId={}, userId={}",
+            event.couponId(), event.userId());
+
+    String payload = objectMapper.writeValueAsString(event);
+    FailedEvent failedEvent = new FailedEvent(
+            KafkaConfig.TOPIC_COUPON_ISSUE,
+            event.couponId().toString(),
+            payload,
+            "DLT 도달: 3회 재시도 실패"
+    );
+    failedEventRepository.save(failedEvent);
+}
+```
+
+### FailedEvent 엔티티
+
+```java
+@Entity
+@Table(name = "failed_events")
+public class FailedEvent {
+    private String topic;
+    private String eventKey;
+    private String payload;
+    private String errorMessage;
+    private FailedEventStatus status;  // PENDING, RETRYING, RECOVERED, ABANDONED
+    private Integer retryCount;
+    private Integer maxRetryCount;     // 기본값 3
+    private LocalDateTime nextRetryAt; // 지수 백오프 기반
+    private LocalDateTime createdAt;
+    private LocalDateTime lastRetryAt;
+    private LocalDateTime recoveredAt;
+
+    // 지수 백오프: 30초 → 1분 → 2분 → 4분...
+    public void scheduleNextRetry() {
+        long delaySeconds = (long) (30 * Math.pow(2, retryCount));
+        this.nextRetryAt = LocalDateTime.now().plusSeconds(delaySeconds);
+    }
+}
+```
+
+### 재처리 스케줄러
+
+```java
+// DltRetryScheduler.java
+@Scheduled(fixedDelay = 10000)  // 10초마다 체크
+@Transactional
+public void retryFailedEvents() {
+    // nextRetryAt이 지난 이벤트만 조회
+    List<FailedEvent> events = repository.findRetryableEventsNow(LocalDateTime.now());
+
+    for (FailedEvent event : events) {
+        event.retry();
+        try {
+            if (processEvent(event)) {
+                event.markAsRecovered();
+            } else {
+                event.markAsFailed("재처리 실패");  // 내부에서 scheduleNextRetry() 호출
+            }
+        } catch (Exception e) {
+            event.markAsFailed(e.getMessage());
+        }
+        repository.save(event);
+    }
+}
+```
+
+### 지수 백오프 타임라인
+
+```
+DLT 도달 (0회 실패)
+    │
+    └── nextRetryAt = now + 30초
+           │
+           ▼ 30초 후
+        1회 재시도 실패
+           │
+           └── nextRetryAt = now + 60초 (30 * 2^1)
+                  │
+                  ▼ 1분 후
+               2회 재시도 실패
+                  │
+                  └── nextRetryAt = now + 120초 (30 * 2^2)
+                         │
+                         ▼ 2분 후
+                      3회 재시도 실패
+                         │
+                         └── status = ABANDONED
+                             (수동 처리 필요)
+```
+
+### 금융권 패턴과 비교
+
+금융권에서는 DL 토픽 자체를 저장소로 사용하는 패턴도 있다.
+
+| 구분 | DL 토픽 방식 (금융권) | DB 방식 (현재 구현) |
+|------|----------------------|-------------------|
+| 실패 저장 | DL 토픽 (Kafka) | FailedEvent 테이블 (DB) |
+| 재시도 주체 | 별도 DL 서버 | 스케줄러 (같은 서버) |
+| 재시도 방식 | DL 토픽 폴링 → 재발행 | DB 조회 → 직접 처리 |
+| 재시도 간격 | 지수 백오프 | 지수 백오프 |
+| 인프라 | Kafka + DL 서버 | Kafka + DB |
+
+**DL 토픽 방식:**
+```
+DLT → DL 서버가 토픽 폴링 → 시간 됐으면 재처리 → 실패하면 다시 DLT에 발행
+```
+
+**현재 구현 (DB 방식):**
+```
+DLT → @DltHandler → DB 저장 → 스케줄러가 DB 폴링 → 재처리
+```
+
+### 왜 DB 방식을 선택했나
+
+1. **단일 서버 환경**: 별도 DL 서버 없이 스케줄러로 충분
+2. **지연 처리가 간단**: `nextRetryAt` 컬럼으로 쉽게 구현
+3. **관리 편의성**: SQL로 실패 이벤트 조회/수동 처리 가능
+
+### 확장 시 고려사항
+
+트래픽이 많아지고 서버가 분산되면 DL 토픽 방식으로 전환할 수 있다:
+
+1. 별도 DL Consumer 서버 구성
+2. DL 토픽에서 직접 폴링
+3. 메시지 헤더에 retry count, next retry time 저장
+4. Kafka 인프라 내에서 완결
+
+현재는 단일 서버 + DB 방식으로 충분하고, 핵심인 **지수 백오프**는 동일하게 적용되어 상대 서버에 회복 시간을 준다.
+
+---
+
 ## Profile 분리
 
 ```java
@@ -359,3 +533,42 @@ docker-compose up -d kafka
 - 메시지 유실 방지가 중요
 - Consumer 확장으로 처리량 증가 필요
 - 피크 시간대 사용자 응답 속도 우선 (P99 개선)
+
+---
+
+## 정리
+
+### 구현한 것
+
+| 항목 | 내용 |
+|------|------|
+| 동시성 제어 | Redis Lua Script로 원자적 수량 체크 |
+| 비동기 처리 | Kafka로 DB 저장 분리 |
+| 순서 보장 | couponId를 키로 사용해 같은 쿠폰은 같은 파티션 |
+| 재시도 | @RetryableTopic으로 3회 재시도 + 지수 백오프 |
+| DLT 재처리 | DB 저장 후 스케줄러가 지수 백오프로 재시도 |
+| 멱등성 | Consumer에서 중복 발급 체크 |
+
+### 아키텍처 결정
+
+| 결정 | 이유 |
+|------|------|
+| Redis + Kafka 조합 | Redis로 빠른 응답, Kafka로 안정적 저장 |
+| couponId를 파티션 키로 | 같은 쿠폰 요청을 순차 처리해 race condition 방지 |
+| DLT → DB 저장 | 단일 서버 환경에서 간단하게 지연 재처리 구현 |
+| 파티션 3개 | 현재는 Consumer 1개지만, 확장 시 최대 3개까지 병렬 처리 가능 |
+
+### 한계와 개선 방향
+
+- **현재**: 단일 서버에서 스케줄러로 DLT 재처리
+- **확장 시**: 별도 DL 서버 + DL 토픽 방식으로 전환 가능
+- **모니터링**: Kafka Lag, 실패 이벤트 수 등 메트릭 추가 필요
+
+---
+
+## Reference
+
+- [Apache Kafka Documentation](https://kafka.apache.org/documentation/)
+- [Spring for Apache Kafka](https://docs.spring.io/spring-kafka/reference/)
+- [Kafka 파티션과 Consumer Group](https://kafka.apache.org/documentation/#intro_consumers)
+- [Redis Lua Scripting](https://redis.io/docs/interact/programmability/eval-intro/)
