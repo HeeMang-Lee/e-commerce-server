@@ -1,0 +1,92 @@
+# =============================================================================
+# Pinpoint APM (Application Performance Management)
+# =============================================================================
+# 분산 트레이싱 및 성능 모니터링
+#
+# 사용법:
+#   docker-compose -f docker-compose.yml -f docker-compose.pinpoint.yml up -d
+#
+# 포트:
+# - Pinpoint Web: 8079
+# - Pinpoint Collector: 9991-9993
+# - HBase: 16010 (Master UI), 16030 (Region Server UI)
+#
+# Agent 설정:
+#   java -javaagent:/path/to/pinpoint-agent.jar \
+#        -Dpinpoint.agentId=ecommerce-1 \
+#        -Dpinpoint.applicationName=ecommerce \
+#        -jar app.jar
+# =============================================================================
+version: '3.8'
+
+services:
+  # ---------------------------------------------------------------------------
+  # HBase: Pinpoint 데이터 저장소
+  # ---------------------------------------------------------------------------
+  pinpoint-hbase:
+    image: pinpointdocker/pinpoint-hbase:2.5.2
+    container_name: ecommerce-pinpoint-hbase
+    ports:
+      - "16010:16010"   # HBase Master UI
+      - "16030:16030"   # HBase Region Server UI
+    volumes:
+      - pinpoint_hbase_data:/home/pinpoint/hbase
+      - pinpoint_zookeeper_data:/home/pinpoint/zookeeper
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:16010/master-status || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+
+  # ---------------------------------------------------------------------------
+  # Pinpoint Collector: Agent 데이터 수집
+  # ---------------------------------------------------------------------------
+  pinpoint-collector:
+    image: pinpointdocker/pinpoint-collector:2.5.2
+    container_name: ecommerce-pinpoint-collector
+    ports:
+      - "9991:9991/tcp"   # gRPC Agent
+      - "9992:9992/tcp"   # gRPC Stat
+      - "9993:9993/tcp"   # gRPC Span
+      - "9994:9994/tcp"   # gRPC (Additional)
+      - "9995:9995/udp"   # UDP Stat
+      - "9996:9996/udp"   # UDP Span
+    environment:
+      - SPRING_PROFILES_ACTIVE=release
+      - PINPOINT_ZOOKEEPER_ADDRESS=pinpoint-hbase
+      - CLUSTER_ENABLE=false
+      - HBASE_HOST=pinpoint-hbase
+      - HBASE_PORT=2181
+      - FLINK_CLUSTER_ENABLE=false
+    depends_on:
+      pinpoint-hbase:
+        condition: service_healthy
+
+  # ---------------------------------------------------------------------------
+  # Pinpoint Web: 대시보드 UI
+  # ---------------------------------------------------------------------------
+  pinpoint-web:
+    image: pinpointdocker/pinpoint-web:2.5.2
+    container_name: ecommerce-pinpoint-web
+    ports:
+      - "8079:8079"
+    environment:
+      - SPRING_PROFILES_ACTIVE=release
+      - PINPOINT_ZOOKEEPER_ADDRESS=pinpoint-hbase
+      - CLUSTER_ENABLE=false
+      - HBASE_HOST=pinpoint-hbase
+      - HBASE_PORT=2181
+      - ADMIN_PASSWORD=admin
+    depends_on:
+      pinpoint-hbase:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8079/serverTime.pinpoint || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+volumes:
+  pinpoint_hbase_data:
+  pinpoint_zookeeper_data:
