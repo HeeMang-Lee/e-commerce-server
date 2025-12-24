@@ -29,6 +29,16 @@ public class KafkaEventPublisher implements DomainEventPublisher {
         }
     }
 
+    /**
+     * 결제 완료 이벤트 발행
+     *
+     * Key 설계: orderId
+     * - 같은 주문의 이벤트는 같은 파티션으로 → 순서 보장
+     * - RankingKafkaConsumer, DataPlatformKafkaConsumer가 주문 단위로 처리
+     *
+     * 참고: 쿠폰 발급(coupon-issue 토픽)은 couponId를 Key로 사용
+     * → 같은 쿠폰 요청이 순차 처리되어 수량 정합성 보장
+     */
     private void publishPaymentCompletedEvent(PaymentCompletedEvent event) {
         String key = event.orderId().toString();
 

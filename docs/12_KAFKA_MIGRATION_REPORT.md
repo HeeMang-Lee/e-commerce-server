@@ -536,6 +536,44 @@ docker-compose up -d kafka
 
 ---
 
+## 토픽별 파티션 키 설계 요약
+
+프로젝트에서 사용하는 두 토픽의 Key 설계 의도:
+
+| 토픽 | Key | 이유 |
+|------|-----|------|
+| `coupon-issue` | **couponId** | 같은 쿠폰 요청이 순차 처리 → 수량 정합성 보장 |
+| `payment-completed` | **orderId** | 같은 주문 이벤트가 순차 처리 → 주문별 처리 순서 보장 |
+
+### coupon-issue: couponId 기반
+
+```java
+// KafkaCouponIssueService.java
+kafkaTemplate.send("coupon-issue", couponId.toString(), event);
+```
+
+- 같은 쿠폰(couponId=1)에 대한 1,000개 요청 → 모두 같은 파티션
+- 순차 처리로 DB 수량 체크 시 race condition 방지
+- 쿠폰별 순서 보장 필수
+
+### payment-completed: orderId 기반
+
+```java
+// KafkaEventPublisher.java
+kafkaTemplate.send("payment-completed", orderId.toString(), event);
+```
+
+- RankingKafkaConsumer: 주문 단위로 상품 판매량 기록
+- DataPlatformKafkaConsumer: 주문 단위로 외부 전송
+- 주문 내 처리 순서 보장 (랭킹 기록 → 외부 전송 순서가 꼬이지 않음)
+
+**userId를 Key로 사용하면?**
+- 같은 사용자의 요청만 순차 처리
+- 쿠폰 수량 체크 시 race condition 발생 가능 (다른 사용자 요청이 병렬 처리)
+- 쿠폰 발급에서는 couponId가 적절
+
+---
+
 ## 정리
 
 ### 구현한 것
