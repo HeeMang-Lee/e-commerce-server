@@ -32,8 +32,7 @@ public class CaffeineCacheConfig {
     public static final int CACHE_TTL_SECONDS = 600;  // 10분 (메모리 정리용)
     public static final int CACHE_MAX_SIZE = 100;
 
-    @Bean
-    @Primary
+    @Bean("caffeineCacheManager")
     public CacheManager caffeineCacheManager() {
         CaffeineCacheManager cacheManager = new CaffeineCacheManager(RANKING_CACHE);
         cacheManager.setCaffeine(caffeineCacheBuilder());
