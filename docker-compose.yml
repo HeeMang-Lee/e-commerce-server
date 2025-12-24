@@ -1,3 +1,14 @@
+# =============================================================================
+# 개발 환경용 Docker Compose
+# =============================================================================
+# 이 설정은 로컬 개발/테스트용입니다.
+# 운영 환경에서는 docker-compose.prod.yml을 참고하세요.
+#
+# Kafka 설정:
+# - 단일 노드 (개발용)
+# - Replication Factor: 1
+# - 운영에서는 최소 3개 브로커 + RF=3 권장
+# =============================================================================
 version: '3.8'
 
 services:
@@ -37,6 +48,47 @@ services:
       timeout: 3s
       retries: 5
 
+  # ---------------------------------------------------------------------------
+  # Kafka (KRaft 모드 - 단일 노드, 개발용)
+  # ---------------------------------------------------------------------------
+  # 개발 환경: 단일 노드로 간단하게 구성
+  # 운영 환경: 최소 3개 브로커 클러스터 권장 (docker-compose.prod.yml 참고)
+  #
+  # 포트 구성:
+  # - 9092: 클라이언트 통신 (PLAINTEXT)
+  # - 9093: 컨트롤러 통신 (CONTROLLER) - 내부용, 외부 노출 X
+  # ---------------------------------------------------------------------------
+  kafka:
+    image: confluentinc/cp-kafka:7.4.0
+    container_name: ecommerce-kafka
+    ports:
+      - "9092:9092"
+    environment:
+      # KRaft 모드 설정 (Zookeeper 불필요)
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      # 리스너 설정: 클라이언트(9092)와 컨트롤러(9093) 분리
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      # 개발 환경: Replication Factor 1 (단일 노드)
+      # 운영 환경: 3 이상 권장
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+      CLUSTER_ID: 'ecommerce-kafka-cluster-001'
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD", "kafka-topics", "--bootstrap-server", "localhost:9092", "--list"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
 volumes:
   mysql_data:
   redis_data:
+  kafka_data:

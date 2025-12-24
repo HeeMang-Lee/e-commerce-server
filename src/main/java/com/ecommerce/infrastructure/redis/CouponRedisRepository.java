@@ -4,11 +4,13 @@ import com.ecommerce.domain.service.CouponIssueResult;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.stereotype.Repository;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -26,28 +28,62 @@ public class CouponRedisRepository {
     private static final String QUEUE_KEY = "coupon:queue";
     private static final DateTimeFormatter DATE_TIME_FORMAT = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
 
+    /**
+     * Lua Script로 원자적 쿠폰 발급 처리
+     * - SISMEMBER, SCARD, SADD를 하나의 원자적 연산으로 실행
+     * - race condition 완전 제거
+     */
+    private static final String ISSUE_SCRIPT = """
+            local issuedKey = KEYS[1]
+            local userId = ARGV[1]
+            local maxQuantity = tonumber(ARGV[2])
+
+            if redis.call('SISMEMBER', issuedKey, userId) == 1 then
+                return 'ALREADY_ISSUED'
+            end
+
+            if redis.call('SCARD', issuedKey) >= maxQuantity then
+                return 'SOLD_OUT'
+            end
+
+            redis.call('SADD', issuedKey, userId)
+            return 'SUCCESS'
+            """;
+
+    private static final DefaultRedisScript<String> ISSUE_REDIS_SCRIPT;
+
+    static {
+        ISSUE_REDIS_SCRIPT = new DefaultRedisScript<>();
+        ISSUE_REDIS_SCRIPT.setScriptText(ISSUE_SCRIPT);
+        ISSUE_REDIS_SCRIPT.setResultType(String.class);
+    }
+
     public CouponIssueResult tryIssue(Long userId, Long couponId, int maxQuantity) {
+        return tryIssue(userId, couponId, maxQuantity, true);
+    }
+
+    public CouponIssueResult tryIssue(Long userId, Long couponId, int maxQuantity, boolean pushToQueue) {
         String issuedKey = getIssuedKey(couponId);
         String userIdStr = userId.toString();
 
-        Long currentCount = redisTemplate.opsForSet().size(issuedKey);
-        if (currentCount != null && currentCount >= maxQuantity) {
-            return CouponIssueResult.SOLD_OUT;
-        }
+        String result = redisTemplate.execute(
+                ISSUE_REDIS_SCRIPT,
+                Collections.singletonList(issuedKey),
+                userIdStr,
+                String.valueOf(maxQuantity)
+        );
 
-        Long added = redisTemplate.opsForSet().add(issuedKey, userIdStr);
-        if (added == null || added == 0) {
+        if ("ALREADY_ISSUED".equals(result)) {
             return CouponIssueResult.ALREADY_ISSUED;
         }
-
-        Long countAfterAdd = redisTemplate.opsForSet().size(issuedKey);
-        if (countAfterAdd != null && countAfterAdd > maxQuantity) {
-            redisTemplate.opsForSet().remove(issuedKey, userIdStr);
+        if ("SOLD_OUT".equals(result)) {
             return CouponIssueResult.SOLD_OUT;
         }
 
-        String queueData = couponId + ":" + userId;
-        redisTemplate.opsForList().rightPush(QUEUE_KEY, queueData);
+        if (pushToQueue) {
+            String queueData = couponId + ":" + userId;
+            redisTemplate.opsForList().rightPush(QUEUE_KEY, queueData);
+        }
 
         log.debug("쿠폰 발급 요청 접수: couponId={}, userId={}", couponId, userId);
         return CouponIssueResult.SUCCESS;
