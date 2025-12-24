@@ -1,0 +1,116 @@
+# =============================================================================
+# 모니터링 환경용 Docker Compose
+# =============================================================================
+# 부하 테스트 및 성능 모니터링을 위한 구성
+#
+# 사용법:
+#   docker-compose -f docker-compose.yml -f docker-compose.monitoring.yml up -d
+#
+# 포함 서비스:
+# - Prometheus (localhost:9090): 메트릭 수집
+# - Grafana (localhost:3000): 대시보드
+# - Redis Exporter (localhost:9121): Redis 메트릭
+# - Kafka Exporter (localhost:9308): Kafka 메트릭
+# =============================================================================
+version: '3.8'
+
+services:
+  # ---------------------------------------------------------------------------
+  # Prometheus: 메트릭 수집 및 저장
+  # ---------------------------------------------------------------------------
+  prometheus:
+    image: prom/prometheus:v2.47.0
+    container_name: ecommerce-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+      - '--web.enable-lifecycle'
+      - '--web.enable-remote-write-receiver'
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:9090/-/healthy"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ---------------------------------------------------------------------------
+  # Grafana: 메트릭 시각화 대시보드
+  # ---------------------------------------------------------------------------
+  grafana:
+    image: grafana/grafana:10.1.0
+    container_name: ecommerce-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+    depends_on:
+      - prometheus
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ---------------------------------------------------------------------------
+  # Redis Exporter: Redis 메트릭 수집
+  # ---------------------------------------------------------------------------
+  # 수집 메트릭:
+  # - redis_commands_processed_total: 처리된 명령 수
+  # - redis_connected_clients: 연결된 클라이언트 수
+  # - redis_memory_used_bytes: 메모리 사용량
+  # - redis_keyspace_hits/misses: 캐시 히트/미스
+  # ---------------------------------------------------------------------------
+  redis-exporter:
+    image: oliver006/redis_exporter:v1.55.0
+    container_name: ecommerce-redis-exporter
+    ports:
+      - "9121:9121"
+    environment:
+      REDIS_ADDR: redis:6379
+    depends_on:
+      - redis
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:9121/metrics"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ---------------------------------------------------------------------------
+  # Kafka Exporter: Kafka 메트릭 수집
+  # ---------------------------------------------------------------------------
+  # 수집 메트릭:
+  # - kafka_consumergroup_lag: Consumer Lag (처리 지연)
+  # - kafka_topic_partitions: 토픽별 파티션 수
+  # - kafka_brokers: 활성 브로커 수
+  # ---------------------------------------------------------------------------
+  kafka-exporter:
+    image: danielqsj/kafka-exporter:v1.7.0
+    container_name: ecommerce-kafka-exporter
+    ports:
+      - "9308:9308"
+    command:
+      - '--kafka.server=kafka:9092'
+      - '--topic.filter=.*'
+      - '--group.filter=.*'
+    depends_on:
+      - kafka
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:9308/metrics"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  prometheus_data:
+  grafana_data:
