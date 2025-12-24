@@ -1,8 +1,10 @@
 # 모니터링 환경 설정
 
-부하 테스트 및 성능 분석을 위한 Prometheus + Grafana 모니터링 환경입니다.
+부하 테스트 및 성능 분석을 위한 모니터링 환경입니다.
 
 ## 구성 요소
+
+### 메트릭 모니터링 (Prometheus + Grafana)
 
 | 서비스 | 포트 | 용도 |
 |--------|------|------|
@@ -11,22 +13,57 @@
 | Redis Exporter | 9121 | Redis 메트릭 노출 |
 | Kafka Exporter | 9308 | Kafka 메트릭 노출 |
 
+### 로그 수집 (ELK Stack)
+
+| 서비스 | 포트 | 용도 |
+|--------|------|------|
+| Elasticsearch | 9200 | 로그 저장 및 검색 |
+| Logstash | 5000 | 로그 수집 및 파싱 |
+| Kibana | 5601 | 로그 시각화 |
+
+### APM (Pinpoint)
+
+| 서비스 | 포트 | 용도 |
+|--------|------|------|
+| Pinpoint Web | 8079 | 트레이스 대시보드 |
+| Pinpoint Collector | 9991-9993 | Agent 데이터 수집 |
+| HBase | 16010 | Pinpoint 데이터 저장 |
+
 ## 실행 방법
 
-### 1. 전체 환경 실행 (개발 + 모니터링)
+### 1. 메트릭 모니터링 (Prometheus + Grafana)
 
 ```bash
-# 프로젝트 루트에서 실행
 docker-compose -f docker-compose.yml -f docker-compose.monitoring.yml up -d
 ```
 
-### 2. 모니터링만 실행 (기존 인프라 사용)
+### 2. 로그 모니터링 (ELK)
 
 ```bash
-docker-compose -f docker-compose.monitoring.yml up -d
+docker-compose -f docker-compose.yml -f docker-compose.elk.yml up -d
+
+# 애플리케이션 실행 시 elk 프로파일 활성화
+java -jar app.jar --spring.profiles.active=elk
 ```
 
-### 3. 상태 확인
+### 3. APM (Pinpoint)
+
+```bash
+docker-compose -f docker-compose.yml -f docker-compose.pinpoint.yml up -d
+
+# Pinpoint Agent 설정은 monitoring/pinpoint/README.md 참고
+```
+
+### 4. 전체 환경 (All-in-One)
+
+```bash
+docker-compose -f docker-compose.yml \
+  -f docker-compose.monitoring.yml \
+  -f docker-compose.elk.yml \
+  -f docker-compose.pinpoint.yml up -d
+```
+
+### 5. 상태 확인
 
 ```bash
 docker-compose -f docker-compose.yml -f docker-compose.monitoring.yml ps
@@ -34,12 +71,10 @@ docker-compose -f docker-compose.yml -f docker-compose.monitoring.yml ps
 
 ## 접속 정보
 
-- **Grafana**: http://localhost:3000
-  - ID: admin / PW: admin
-  - 첫 로그인 시 비밀번호 변경 화면이 나타남 (Skip 가능)
-
+- **Grafana**: http://localhost:3000 (admin / admin)
 - **Prometheus**: http://localhost:9090
-  - 메트릭 검색 및 쿼리 테스트 가능
+- **Kibana**: http://localhost:5601
+- **Pinpoint Web**: http://localhost:8079
 
 ## Spring Boot 설정
 

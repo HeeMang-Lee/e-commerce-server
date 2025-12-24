@@ -37,6 +37,9 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
     implementation 'io.micrometer:micrometer-registry-prometheus'
 
+    // ELK Logging
+    implementation 'net.logstash.logback:logstash-logback-encoder:7.4'
+
     runtimeOnly 'com.mysql:mysql-connector-j'
 
     compileOnly 'org.projectlombok:lombok'
