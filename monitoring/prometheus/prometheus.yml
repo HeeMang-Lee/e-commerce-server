@@ -1,0 +1,82 @@
+# =============================================================================
+# Prometheus 설정
+# =============================================================================
+# 메트릭 수집 대상:
+# - Spring Boot Actuator (애플리케이션 메트릭)
+# - Redis Exporter (Redis 메트릭)
+# - Kafka Exporter (Kafka 메트릭)
+# - Prometheus 자체 메트릭
+# =============================================================================
+
+global:
+  scrape_interval: 15s      # 15초마다 메트릭 수집
+  evaluation_interval: 15s  # 15초마다 규칙 평가
+  scrape_timeout: 10s       # 수집 타임아웃
+
+# Alertmanager 설정 (필요시 활성화)
+# alerting:
+#   alertmanagers:
+#     - static_configs:
+#         - targets:
+#           - alertmanager:9093
+
+# 수집 대상 설정
+scrape_configs:
+  # ---------------------------------------------------------------------------
+  # Prometheus 자체 메트릭
+  # ---------------------------------------------------------------------------
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+    metrics_path: /metrics
+
+  # ---------------------------------------------------------------------------
+  # Spring Boot 애플리케이션 메트릭
+  # ---------------------------------------------------------------------------
+  # Spring Boot Actuator의 Prometheus 엔드포인트에서 메트릭 수집
+  # 필요 설정 (application.yml):
+  #   management.endpoints.web.exposure.include: prometheus,health
+  #   management.metrics.export.prometheus.enabled: true
+  # ---------------------------------------------------------------------------
+  - job_name: 'spring-boot'
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ['host.docker.internal:8081']
+        labels:
+          application: 'ecommerce'
+    # 연결 실패 시 무시 (서버가 꺼져있어도 Prometheus 정상 동작)
+    scrape_timeout: 5s
+
+  # ---------------------------------------------------------------------------
+  # Redis 메트릭
+  # ---------------------------------------------------------------------------
+  # 주요 메트릭:
+  # - redis_commands_processed_total: 명령 처리량
+  # - redis_connected_clients: 클라이언트 수
+  # - redis_memory_used_bytes: 메모리 사용량
+  # - redis_keyspace_hits_total / redis_keyspace_misses_total: 캐시 효율
+  # ---------------------------------------------------------------------------
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis-exporter:9121']
+        labels:
+          service: 'redis'
+
+  # ---------------------------------------------------------------------------
+  # Kafka 메트릭
+  # ---------------------------------------------------------------------------
+  # 주요 메트릭:
+  # - kafka_consumergroup_lag: Consumer Lag (★ 중요)
+  # - kafka_topic_partition_current_offset: 현재 오프셋
+  # - kafka_brokers: 브로커 수
+  # ---------------------------------------------------------------------------
+  - job_name: 'kafka'
+    static_configs:
+      - targets: ['kafka-exporter:9308']
+        labels:
+          service: 'kafka'
+
+# K6 Remote Write 수신 (선택사항)
+# K6 테스트 결과를 Prometheus로 직접 전송할 때 사용
+# 실행: k6 run --out experimental-prometheus-rw script.js
+remote_write: []

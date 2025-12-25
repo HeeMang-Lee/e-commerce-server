@@ -42,6 +42,7 @@ public class RedisCacheConfig {
     private static final double TTL_JITTER_RATE = 0.1;
 
     @Bean
+    @Primary
     public CacheManager cacheManager(RedisConnectionFactory connectionFactory, ObjectMapper objectMapper) {
 
         // 상품 목록용 Serializer (List<ProductListResponse>)

@@ -70,7 +70,8 @@ CREATE TABLE order_payments (
 
     INDEX idx_order (order_id),
     INDEX idx_status (payment_status),
-    INDEX idx_paid_at (paid_at)
+    INDEX idx_paid_at (paid_at),
+    INDEX idx_status_paid_at (payment_status, paid_at)  -- 결제 상태+시간 조회 복합 인덱스
 );
 
 CREATE TABLE coupons (
@@ -133,6 +134,26 @@ CREATE TABLE outbox_events (
     processed_at TIMESTAMP,
 
     INDEX idx_status (status),
+    INDEX idx_created (created_at)
+);
+
+CREATE TABLE failed_events (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    topic VARCHAR(100) NOT NULL,
+    event_key VARCHAR(100),
+    payload TEXT NOT NULL,
+    error_message TEXT,
+    status VARCHAR(20) NOT NULL DEFAULT 'PENDING',
+    retry_count INT NOT NULL DEFAULT 0,
+    max_retry_count INT NOT NULL DEFAULT 3,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    last_retry_at TIMESTAMP,
+    recovered_at TIMESTAMP,
+    next_retry_at TIMESTAMP,
+
+    INDEX idx_status (status),
+    INDEX idx_status_next_retry (status, next_retry_at),  -- 스케줄러 조회용 복합 인덱스
+    INDEX idx_topic (topic),
     INDEX idx_created (created_at)
 );
 
