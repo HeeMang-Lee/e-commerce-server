@@ -36,9 +36,9 @@ export const options = {
             startTime: '20s',
             startVUs: 0,
             stages: [
-                { duration: '20s', target: 100 },   // 100명까지
-                { duration: '30s', target: 300 },   // 300명까지
-                { duration: '40s', target: 500 },   // 500명까지 (피크)
+                { duration: '20s', target: 50 },    // 50명까지
+                { duration: '30s', target: 150 },   // 150명까지
+                { duration: '40s', target: 200 },   // 200명까지 (피크) - 로컬 환경 적정 수준
                 { duration: '20s', target: 0 },     // 종료
             ],
             exec: 'orderLoad',
@@ -71,7 +71,7 @@ export function orderLoad() {
 
     const payload = JSON.stringify({
         userId: userId,
-        orderItems: [{ productId: productId, quantity: 1 }],
+        items: [{ productId: productId, quantity: 1 }],
     });
 
     const start = Date.now();

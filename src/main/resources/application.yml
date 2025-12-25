@@ -1,5 +1,12 @@
 server:
   port: 8081
+  tomcat:
+    threads:
+      max: 400
+      min-spare: 50
+    max-connections: 10000
+    accept-count: 200
+    connection-timeout: 5000
 
 spring:
   datasource:
@@ -7,6 +14,13 @@ spring:
     username: root
     password: q1w2e3r4
     driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      maximum-pool-size: 50
+      minimum-idle: 10
+      idle-timeout: 30000
+      connection-timeout: 5000
+      max-lifetime: 1800000
+      pool-name: HikariCP-Ecommerce
 
   data:
     redis:
@@ -15,10 +29,10 @@ spring:
       password: q1w2e3r4
       lettuce:
         pool:
-          max-active: 8
-          max-idle: 8
-          min-idle: 2
-          max-wait: -1ms
+          max-active: 50
+          max-idle: 20
+          min-idle: 5
+          max-wait: 3000ms
 
   jpa:
     hibernate:

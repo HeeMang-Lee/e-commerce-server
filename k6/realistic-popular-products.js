@@ -66,7 +66,7 @@ export function backgroundTraffic() {
 
 export function popularProductsLoad() {
     const start = Date.now();
-    const res = http.get(`${BASE_URL}/api/products/popular`, {
+    const res = http.get(`${BASE_URL}/api/products/top`, {
         headers: { 'Content-Type': 'application/json' },
         tags: { name: 'popular' },
     });

@@ -69,7 +69,7 @@ export function pointStress() {
     });
 
     const start = Date.now();
-    const res = http.post(`${BASE_URL}/api/points/charge`, payload, {
+    const res = http.post(`${BASE_URL}/api/points/users/${userId}/charge`, payload, {
         headers: { 'Content-Type': 'application/json' },
         tags: { name: 'point_charge' },
     });
