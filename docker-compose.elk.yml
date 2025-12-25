@@ -43,7 +43,7 @@ services:
     container_name: ecommerce-logstash
     ports:
       - "5044:5044"   # Beats input
-      - "5000:5000"   # TCP input (Spring Boot Logback)
+      - "5001:5000"   # TCP input (Spring Boot Logback) - 5000은 macOS AirPlay가 사용
       - "9600:9600"   # Logstash API
     volumes:
       - ./monitoring/logstash/pipeline:/usr/share/logstash/pipeline:ro
